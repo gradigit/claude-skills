@@ -1,8 +1,6 @@
 # claude-skills
 
-A collection of Claude Code skills for structured workflows, session management, and skill development. Built for [Claude Code](https://code.claude.com) — Anthropic's CLI tool.
-
-These skills are opinionated workflow tools that I built and refined through daily use. They encode specific patterns for managing Claude Code sessions, maintaining project documentation, and creating new skills. They work best as a cohesive set, but individual skills can be used standalone where noted.
+Opinionated workflow tools for [Claude Code](https://code.claude.com) that I built and refined through daily use. They handle session management, project documentation, and skill development. They work best as a set, but individual skills can be used standalone where noted.
 
 ## Skills
 
@@ -14,24 +12,20 @@ These skills are opinionated workflow tools that I built and refined through dai
 | [updating-skills](.claude/skills/updating-skills/) | 1.0.0 | Systematic workflow for modifying skills with version bumps and audits |
 | [auditing-skills](.claude/skills/auditing-skills/) | 1.0.0 | Validates skills against the Agent Skills spec and best practices |
 
-These three form a lifecycle: **create** a skill, **update** it as you iterate, **audit** it for quality. `updating-skills` references `creating-skills` for spec compliance rules and `auditing-skills` for the validation checklist.
+These three form a lifecycle: create a skill, update it as you iterate, audit it for quality. `updating-skills` references `creating-skills` for spec compliance and `auditing-skills` for the validation checklist.
 
 ### Session Management
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [handoff](.claude/skills/handoff/) | 2.1.0 | Creates HANDOFF.md files for seamless session continuation after `/clear` |
+| [handoff](.claude/skills/handoff/) | 2.1.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off |
 | [syncing-docs](.claude/skills/syncing-docs/) | 2.0.0 | Detects drift between code and project state files, fixes owned docs |
 | [managing-doc-manifest](.claude/skills/managing-doc-manifest/) | 1.0.0 | Creates `.doc-manifest.yaml` — a registry of docs and their code references |
 | [wrap](.claude/skills/wrap/) | 1.0.0 | End-of-session coordinator: sync docs, audit CLAUDE.md, then handoff |
 
-These skills implement a **session continuity workflow**:
+During work, `syncing-docs` keeps documentation in sync with code changes. At the end of a session, `wrap` chains sync-docs → [claude-md-improver](https://github.com/anthropics/skills) (Anthropic plugin) → handoff. The result is a HANDOFF.md snapshot so a new session can resume with "Read HANDOFF.md and continue."
 
-1. **During work**: `syncing-docs` keeps documentation in sync with code changes
-2. **End of session**: `wrap` chains sync-docs → [claude-md-improver](https://github.com/anthropics/skills) (Anthropic plugin) → handoff
-3. **Handoff**: Creates a HANDOFF.md snapshot so a new session can resume with "Read HANDOFF.md and continue"
-
-The key idea: Claude Code sessions are ephemeral, but project context shouldn't be. These skills bridge that gap by maintaining CLAUDE.md, TODO.md, HANDOFF.md, and `.doc-manifest.yaml` as persistent state files.
+Claude Code sessions are ephemeral, but project context shouldn't be. These skills maintain CLAUDE.md, TODO.md, HANDOFF.md, and `.doc-manifest.yaml` as persistent state files that survive `/clear` and crashes.
 
 ### Research
 
@@ -43,11 +37,11 @@ Standalone skill. No dependencies on other skills in this collection.
 
 ## Why These Exist
 
-Claude Code is powerful but sessions are stateless — context is lost on `/clear` or crash. After enough sessions where I had to re-explain project state, I built these skills to solve three problems:
+Claude Code sessions are stateless — context is lost on `/clear` or crash. After enough sessions where I had to re-explain project state from scratch, I built these skills to fix three things:
 
-1. **Session amnesia**: `handoff` captures what was done, what failed, and what's next. A new session reads HANDOFF.md and picks up where the last one left off.
-2. **Documentation drift**: `syncing-docs` detects when code changes make docs stale and fixes them automatically. No more outdated README sections or wrong file paths in CLAUDE.md.
-3. **Skill quality**: The meta-tooling skills (`creating-skills`, `updating-skills`, `auditing-skills`) enforce consistency so skills don't degrade over time.
+- `handoff` captures what was done, what failed, and what's next. A new session reads HANDOFF.md and picks up where the last one left off.
+- `syncing-docs` detects when code changes make docs stale and fixes them. No more outdated README sections or wrong file paths in CLAUDE.md.
+- The meta-tooling skills (`creating-skills`, `updating-skills`, `auditing-skills`) enforce consistency so skills don't degrade as you iterate on them.
 
 ## Installation
 
@@ -114,10 +108,10 @@ You're free to modify any of these to fit your workflow. The skills are MIT-lice
 
 ### Common customizations
 
-- **Don't want `.doc-manifest.yaml`?** Remove `managing-doc-manifest` and the manifest step from `syncing-docs`
-- **Don't use HANDOFF.md?** Use `syncing-docs` standalone without `wrap` or `handoff`
-- **Want different HANDOFF.md format?** Edit `handoff/templates.md`
-- **Want different audit rules?** Edit `auditing-skills/checklist.md`
+- Don't want `.doc-manifest.yaml`? Remove `managing-doc-manifest` and the manifest step from `syncing-docs`
+- Don't use HANDOFF.md? Use `syncing-docs` standalone without `wrap` or `handoff`
+- Want a different HANDOFF.md format? Edit `handoff/templates.md`
+- Want different audit rules? Edit `auditing-skills/checklist.md`
 
 ## Related
 
