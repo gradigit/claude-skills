@@ -48,16 +48,78 @@ Claude Code sessions are stateless — context is lost on `/clear` or crash. Aft
 
 ### Guided install via AI agent
 
-If you're using Claude, you can paste this repo URL into the chat and ask Claude to guide you through installation. Claude will read this README, enumerate the available skills with descriptions, ask which ones you want, check what's already installed, and copy the selected skills to `~/.claude/skills/`.
+Paste this repo URL into Claude and ask it to install skills. Claude will guide you through the full process interactively.
 
 **Instructions for the AI agent:**
 
-1. Read all `SKILL.md` files under `.claude/skills/` in this repo (fetch from GitHub if not cloned locally). Parse the `name`, `description`, and `metadata.tags` from each frontmatter.
-2. Group skills by tag and present them to the user with their descriptions. For each skill, note whether it is already installed at `~/.claude/skills/{name}/` and if so, the installed version vs. the repo version.
-3. Ask the user which skills to install. Use the `AskUserQuestion` tool with `multiSelect: true` if available — list each skill as an option with its description. Otherwise ask in plain text. Accept individual names, tag groups (e.g. "all session management skills"), or "all".
-4. Warn about dependencies: if the user selects `wrap`, note it also needs `handoff`, `syncing-docs`, and `managing-doc-manifest`. If they select `updating-skills`, note it works best alongside `auditing-skills` and `testing-skills`.
-5. For each selected skill, copy the skill directory to `~/.claude/skills/{name}/`. If a version is already installed, confirm before overwriting.
-6. After installing, confirm what was installed and the slash command to invoke each (e.g. `/handoff`, `/study`).
+Follow these steps in order. Use `AskUserQuestion` for all questions where it is available.
+
+**Step 1 — Language**
+
+Ask (single select):
+```
+[ ] English
+[ ] 한국어
+```
+Use the chosen language for all questions, descriptions, and confirmations from this point on. Skill file contents (SKILL.md) are always in English and should not be modified — only the wizard UI is translated.
+
+**Step 2 — Check installed state (silent)**
+
+Check `~/.claude/skills/` for any skills already installed from this repo. Compare versions against the repo. If any are installed, proceed to Step 3. Otherwise skip to Step 4.
+
+**Step 3 — Returning user (only if skills already installed)**
+
+Ask (single select):
+```
+[ ] Update my installed skills
+[ ] Install skills I don't have yet
+[ ] Both
+```
+Show a version diff before proceeding, e.g.: "`handoff` 2.0.0 → 2.1.0 · `syncing-docs` up to date · `testing-skills` new"
+
+**Step 4 — Detail level**
+
+Ask (single select):
+```
+[ ] Full explanation — walk me through each skill with use cases and examples
+[ ] Basic explanation — just the one-liners
+[ ] I'm an experienced user, I'll select the skills myself
+```
+
+**Step 5 — Present skills and pick**
+
+Fetch all `SKILL.md` files from `.claude/skills/` in this repo. Parse `name`, `description`, and `metadata.tags` from each frontmatter. Present skills grouped by category at the detail level chosen in Step 4. Mark already-installed skills with their current version.
+
+Then ask (multi-select):
+```
+[ ] {skill name} — {description}
+[ ] ...
+```
+
+**Step 6 — Install location**
+
+Ask (single select):
+```
+[ ] ~/.claude/skills/ — global, works in all projects (Recommended)
+[ ] .claude/skills/ — current project only
+```
+
+**Step 7 — Dependency resolution (silent)**
+
+Before installing, auto-resolve dependencies:
+- `wrap` requires `handoff`, `syncing-docs`, `managing-doc-manifest` — add any missing ones and tell the user
+- `updating-skills` works best with `auditing-skills` and `testing-skills` — add if missing and tell the user
+- If a skill dir already exists but is not from this repo, warn before overwriting
+
+**Step 8 — Install**
+
+Copy each selected skill directory to the chosen location. For each skill being overwritten, show the version change (e.g. `handoff` 2.0.0 → 2.1.0).
+
+**Step 9 — Post-install summary**
+
+List every installed skill with its slash command (e.g. `/handoff`, `/study`). For users who chose full or basic explanation, show one example prompt per skill. End with:
+
+> "To get updates or install more skills later, just paste this repo link into Claude again."
 
 ### Option 1: Clone into a project (project-level)
 
