@@ -218,6 +218,89 @@ Use for: "Does X already exist?", "What solutions are available for Y?"
 [Standard source table]
 ```
 
+## Multi-Topic Research Template
+
+Use for: Multiple related research topics in one session (e.g., `/study A, B, C, D`).
+
+```markdown
+# Study: [Overall Theme]
+
+**Date:** YYYY-MM-DD
+**Depth:** Full
+**Topics:** [N] topics
+**Time spent:** [X searches, Y sources reviewed]
+
+## Executive Summary
+
+[Synthesize across ALL topics — not just a summary of each. What's the overall picture? How do the topics connect? What's the most important finding across all studies?]
+
+## Study [Label]: [Topic Title]
+
+### Hypothesis
+| ID | Hypothesis | Initial Confidence |
+|----|-----------|-------------------|
+| H[N].1 | [claim] | High/Med/Low |
+| H[N].2 | [alternative] | High/Med/Low |
+
+### Findings
+[Detailed findings with inline citations]
+
+### Recommendation
+[Concrete, actionable recommendation]
+
+### Sources
+| Source | URL | Quality | Notes |
+|--------|-----|---------|-------|
+
+## Study [Label]: [Next Topic]
+[Same structure repeats]
+
+...
+
+## Cross-Cutting Findings
+
+Discoveries that span multiple topics:
+- **[Finding]:** Connects Study [X] and Study [Y] — [explanation]. Source: [source]
+- **[Finding]:** [explanation]
+
+## Hypothesis Assessment
+
+| ID | Topic | Hypothesis | Initial | Final | Key Evidence |
+|----|-------|-----------|---------|-------|-------------|
+| H1.1 | [A] | [claim] | Med | High | [sources] |
+| H2.1 | [B] | [claim] | Med | Low | [sources] |
+
+## Verification Status
+
+### Verified (2+ independent sources)
+- [Claim]: Source A, Source B — Topic [X]
+
+### Unverified (single source)
+- [Claim]: Only found in [source] — Topic [X]
+
+### Conflicts
+- [Topic]: Source A says X, Source B says Y — Resolution: [how resolved]
+
+## Self-Critique
+
+| Issue | Severity | Topic | Resolution |
+|-------|----------|-------|------------|
+| [Gap/bias/limitation] | High/Med/Low | [which topic] | [how addressed] |
+
+## Limitations & Gaps
+- [What couldn't be determined]
+- [Areas needing further research]
+
+## Source Quality Table
+
+| Source | URL | Quality | Recency | Topics |
+|--------|-----|---------|---------|--------|
+| [Name] | [URL] | Tier 1/2 | 2026 | [A, C] |
+
+## Overall Recommendations
+[Prioritized list of actionable next steps across all topics]
+```
+
 ## File Naming Convention
 
 ```
