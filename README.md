@@ -46,6 +46,19 @@ Claude Code sessions are stateless — context is lost on `/clear` or crash. Aft
 
 ## Installation
 
+### Guided install via AI agent
+
+If you're using Claude, you can paste this repo URL into the chat and ask Claude to guide you through installation. Claude will read this README, enumerate the available skills with descriptions, ask which ones you want, check what's already installed, and copy the selected skills to `~/.claude/skills/`.
+
+**Instructions for the AI agent:**
+
+1. Read all `SKILL.md` files under `.claude/skills/` in this repo (fetch from GitHub if not cloned locally). Parse the `name`, `description`, and `metadata.tags` from each frontmatter.
+2. Group skills by tag and present them to the user with their descriptions. For each skill, note whether it is already installed at `~/.claude/skills/{name}/` and if so, the installed version vs. the repo version.
+3. Ask the user which skills to install. Accept: individual names, tag groups (e.g. "all session management skills"), or "all".
+4. Warn about dependencies: if the user selects `wrap`, note it also needs `handoff`, `syncing-docs`, and `managing-doc-manifest`. If they select `updating-skills`, note it works best alongside `auditing-skills` and `testing-skills`.
+5. For each selected skill, copy the skill directory to `~/.claude/skills/{name}/`. If a version is already installed, confirm before overwriting.
+6. After installing, confirm what was installed and the slash command to invoke each (e.g. `/handoff`, `/study`).
+
 ### Option 1: Clone into a project (project-level)
 
 ```bash
