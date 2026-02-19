@@ -1,10 +1,11 @@
 ---
 name: auditing-skills
-description: Audits Agent Skills for spec compliance and best practices. Activates when user asks to "audit skill", "check skill", "validate skill", or mentions skill optimization.
+description: Audits Agent Skills for spec compliance and best practices. Activates when user asks to "audit skill", "check skill", "validate skill", or mentions skill optimization. Do NOT use when creating, updating, or testing skills.
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
   author: gradigit
+  category: meta-tooling
   tags:
     - skills
     - meta
@@ -88,6 +89,19 @@ Generate report in this structure:
 {Optimizations - nice to have}
 ```
 
+## Evaluation Coverage
+
+Check the skill's EVALUATIONS.md:
+
+| Check | Severity |
+|-------|----------|
+| EVALUATIONS.md present | Warning (missing = NEEDS WORK) |
+| 3+ scenarios defined | Warning |
+| Given/When/Then format | Warning |
+| At least one should-NOT-trigger scenario | Warning |
+
+For deep validation (running scenarios), use [testing-skills](../testing-skills/SKILL.md).
+
 ## Severity Levels
 
 **Critical** (spec violations):
@@ -158,7 +172,7 @@ Update this skill when:
 1. **On spec change**: Agent Skills spec updates → update checklist
 2. **On new anti-pattern**: Discover common issue → add to checks
 
-Current version: 1.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 2.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
 
 ## References
 

@@ -132,6 +132,21 @@ Complete validation criteria for Agent Skills.
 
 ---
 
+## Evaluations
+
+### EVALUATIONS.md
+- [ ] EVALUATIONS.md present in skill directory
+- [ ] 3+ scenarios defined
+- [ ] Uses Given/When/Then format
+- [ ] At least one should-NOT-trigger scenario present
+- [ ] Scenarios cover happy path and edge case
+
+### Description Activation
+- [ ] Negative triggers present ("Do NOT use when...")
+- [ ] Trigger disambiguation: no overlap with sibling skills' triggers
+
+---
+
 ## Anti-Patterns to Check
 
 | Anti-Pattern | Severity |
@@ -151,6 +166,8 @@ Complete validation criteria for Agent Skills.
 | Deeply nested references | Warning |
 | Windows paths (`\`) | Warning |
 | Too many options without default | Warning |
+| Missing EVALUATIONS.md | Warning |
+| No negative triggers in description | Warning |
 | Verbose explanations | Suggestion |
 | Changelog inline instead of separate file | Suggestion |
 | No self-evolution section | Suggestion |
@@ -160,8 +177,8 @@ Complete validation criteria for Agent Skills.
 
 ## Scoring
 
-**PASS**: 0 critical, 0-2 warnings
-**NEEDS WORK**: 0 critical, 3+ warnings OR any suggestions
+**PASS**: 0 critical, 0-2 warnings, EVALUATIONS.md present
+**NEEDS WORK**: 0 critical, 3+ warnings OR missing EVALUATIONS.md
 **FAIL**: 1+ critical issues
 
 ---

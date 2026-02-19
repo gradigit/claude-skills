@@ -8,11 +8,12 @@ Opinionated workflow tools for [Claude Code](https://code.claude.com) that I bui
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [creating-skills](.claude/skills/creating-skills/) | 3.1.0 | Creates new skills through adaptive interviewing or autonomous generation |
-| [updating-skills](.claude/skills/updating-skills/) | 1.0.0 | Systematic workflow for modifying skills with version bumps and audits |
-| [auditing-skills](.claude/skills/auditing-skills/) | 1.0.0 | Validates skills against the Agent Skills spec and best practices |
+| [creating-skills](.claude/skills/creating-skills/) | 4.0.0 | Creates new skills through adaptive interviewing or autonomous generation |
+| [updating-skills](.claude/skills/updating-skills/) | 2.0.0 | Systematic workflow for modifying skills with version bumps and audits |
+| [auditing-skills](.claude/skills/auditing-skills/) | 2.0.0 | Validates skills against the Agent Skills spec and best practices |
+| [testing-skills](.claude/skills/testing-skills/) | 1.0.0 | Three-tier evaluation of skills (triggering, functional, performance) |
 
-These three form a lifecycle: create a skill, update it as you iterate, audit it for quality. `updating-skills` references `creating-skills` for spec compliance and `auditing-skills` for the validation checklist.
+These four form a lifecycle: create a skill, update it as you iterate, audit it for quality, test it with evaluations. `updating-skills` references `creating-skills` for spec compliance and `auditing-skills` for the validation checklist. `testing-skills` runs EVALUATIONS.md scenarios to verify skill behavior.
 
 ### Session Management
 
@@ -41,7 +42,7 @@ Claude Code sessions are stateless — context is lost on `/clear` or crash. Aft
 
 - `handoff` captures what was done, what failed, and what's next. A new session reads HANDOFF.md and picks up where the last one left off.
 - `syncing-docs` detects when code changes make docs stale and fixes them. No more outdated README sections or wrong file paths in CLAUDE.md.
-- The meta-tooling skills (`creating-skills`, `updating-skills`, `auditing-skills`) enforce consistency so skills don't degrade as you iterate on them.
+- The meta-tooling skills (`creating-skills`, `updating-skills`, `auditing-skills`, `testing-skills`) enforce consistency so skills don't degrade as you iterate on them.
 
 ## Installation
 
@@ -79,6 +80,9 @@ wrap ──→ syncing-docs ──→ managing-doc-manifest
 
 updating-skills ──→ creating-skills (spec rules)
                 └──→ auditing-skills (validation checklist)
+                └──→ testing-skills (run evaluations)
+
+testing-skills ──→ creating-skills (EVALUATIONS.md format)
 
 study (standalone)
 ```

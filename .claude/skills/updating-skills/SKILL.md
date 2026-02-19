@@ -1,11 +1,12 @@
 ---
 name: updating-skills
-description: Systematic workflow for modifying existing Agent Skills. Ensures spec compliance, version bumps, changelog updates, and audit pass after every change. Activates when user asks to "update skill", "modify skill", "evolve skill", "bump version", or mentions changing an existing skill.
+description: Systematic workflow for modifying existing Agent Skills. Ensures spec compliance, version bumps, changelog updates, and audit pass after every change. Activates when user asks to "update skill", "modify skill", "evolve skill", "bump version", or mentions changing an existing skill. Do NOT use when creating, auditing, or testing skills.
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "2.0.0"
   author: gradigit
-  updated: "2026-01-29"
+  category: meta-tooling
+  updated: "2026-02-07"
   tags:
     - skills
     - workflow
@@ -31,15 +32,17 @@ When iterating on a skill across multiple conversations, the creating-skills spe
 Use TaskCreate to track progress:
 
 - [ ] 1. Read current state (all skill files)
-- [ ] 2. Understand requested changes
-- [ ] 3. Classify version bump (major/minor/patch)
-- [ ] 4. Make changes following spec
-- [ ] 5. Bump version in frontmatter
-- [ ] 6. Update CHANGELOG.md
-- [ ] 7. Audit against checklist
-- [ ] 8. Fix any audit issues
-- [ ] 9. Present summary to user
-- [ ] 10. Push if published (user confirms)
+- [ ] 2. Run current evaluations (baseline)
+- [ ] 3. Understand requested changes
+- [ ] 4. Classify version bump (major/minor/patch)
+- [ ] 5. Make changes following spec
+- [ ] 6. Update EVALUATIONS.md (if behavior changed)
+- [ ] 7. Bump version in frontmatter
+- [ ] 8. Update CHANGELOG.md
+- [ ] 9. Audit against checklist
+- [ ] 10. Fix any audit issues
+- [ ] 11. Present summary to user
+- [ ] 12. Push if published (user confirms)
 
 ## Reading Current State
 
@@ -47,13 +50,14 @@ Before any changes, read **all** skill files:
 
 ```
 skill-name/
-├── SKILL.md       # Always read first
-├── CHANGELOG.md   # Check current version
-├── examples.md    # If exists
-├── heuristics.md  # If exists
-├── reference.md   # If exists
-├── README.md      # If exists (published skills)
-└── LICENSE         # If exists
+├── SKILL.md        # Always read first
+├── CHANGELOG.md    # Check current version
+├── EVALUATIONS.md  # Check existing test scenarios
+├── examples.md     # If exists
+├── heuristics.md   # If exists
+├── reference.md    # If exists
+├── README.md       # If exists (published skills)
+└── LICENSE          # If exists
 ```
 
 Never propose changes to files you haven't read.
@@ -69,6 +73,19 @@ Follow semver:
 | Bug fix, typo, version ref fix, wording tweak | **Patch** x.y.Z | 4.3.0 → 4.3.1 |
 
 When in doubt, use **minor**.
+
+## Evaluation-First Updates
+
+Decide whether EVALUATIONS.md needs changes:
+
+| Change Type | Update EVALUATIONS.md? | Example |
+|-------------|----------------------|---------|
+| New feature / capability | Yes — add scenario | Added Python support → add Python triggering + functional test |
+| Changed behavior | Yes — update existing scenario | Modified output format → update expected output |
+| Bug fix | Maybe — add edge case if gap exposed | Fix crash on empty input → add empty-input scenario |
+| Wording / typo only | No | Fixed typo in description |
+
+Run evaluations **before** changes (baseline) and **after** (regression check). Use [testing-skills](../testing-skills/SKILL.md) for execution.
 
 ## Making Changes
 
@@ -136,6 +153,11 @@ Run the auditing-skills checklist. Key checks:
 - [ ] Self-evolution section present
 - [ ] References one level deep
 
+### Evaluations
+- [ ] EVALUATIONS.md present and up to date
+- [ ] New/changed behavior has matching scenario
+- [ ] should-NOT-trigger scenarios still valid
+
 ### Cross-File (updating-specific)
 - [ ] Version consistent across all files
 - [ ] Step counts match across all references
@@ -187,16 +209,18 @@ Update the screening-github-cloud skill to add Python support
 ```
 
 **Process:**
-1. Read all files: SKILL.md, CHANGELOG.md, examples.md, heuristics.md, README.md, LICENSE
-2. Changes needed: Add Python screening patterns
-3. Version bump: minor (new capability) → 4.4.0
-4. Make changes in SKILL.md, heuristics.md, examples.md
-5. Update frontmatter version to "4.4.0"
-6. Add CHANGELOG.md entry for 4.4.0
-7. Audit all files for consistency
-8. Fix any stale version refs (examples.md commonly has old versions)
-9. Present diff summary
-10. Push to GitHub
+1. Read all files: SKILL.md, CHANGELOG.md, EVALUATIONS.md, examples.md, heuristics.md, README.md, LICENSE
+2. Run current evaluations (baseline — all pass)
+3. Changes needed: Add Python screening patterns
+4. Version bump: minor (new capability) → 4.4.0
+5. Make changes in SKILL.md, heuristics.md, examples.md
+6. Update EVALUATIONS.md (add Python triggering + functional scenario)
+7. Update frontmatter version to "4.4.0"
+8. Add CHANGELOG.md entry for 4.4.0
+9. Audit all files for consistency
+10. Fix any stale version refs (examples.md commonly has old versions)
+11. Present diff summary
+12. Push to GitHub
 
 ## Common Pitfalls
 
@@ -215,9 +239,10 @@ Update this skill when:
 2. **On new pitfall**: Add to common pitfalls table
 3. **On workflow improvement**: Refine steps based on real usage
 
-Current version: 1.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 2.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
 
 ## References
 
-- Creating skills spec: [~/.claude/skills/creating-skills/SKILL.md](../creating-skills/SKILL.md)
-- Auditing checklist: [~/.claude/skills/auditing-skills/SKILL.md](../auditing-skills/SKILL.md)
+- Creating skills spec (v4.0.0): [creating-skills](../creating-skills/SKILL.md)
+- Auditing checklist (v2.0.0): [auditing-skills](../auditing-skills/SKILL.md)
+- Testing evaluations: [testing-skills](../testing-skills/SKILL.md)

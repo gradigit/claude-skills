@@ -1,5 +1,26 @@
 # Changelog
 
+## [4.0.0] - 2026-02-07
+
+### Added
+- **Negative trigger guidance**: Description must include "Do NOT use this skill when..." pattern
+- **Activation Reliability section**: ~20% baseline, hooks for 84%+, skills/commands equivalence
+- **Token Budget section**: SLASH_COMMAND_TOOL_CHAR_BUDGET guidance, context window competition
+- **Expanded frontmatter template**: argument-hint, user-invocable, disable-model-invocation, model, context, agent, hooks
+- **`name` field note**: Explicitly documented as optional (defaults to directory name)
+- `category` field in metadata
+- Agent-as-a-Judge evaluation methodology in reference.md (0.3% disagreement rate)
+- Success criteria framework table in reference.md (quantitative + qualitative)
+- Advanced frontmatter fields reference table in reference.md
+- Nested directory discovery for monorepos in reference.md
+
+### Changed
+- **BREAKING**: Evaluation format changed from Input/Expected/Criteria to **Given/When/Then**
+- **BREAKING**: should-NOT-trigger scenario now required in evaluations
+- Validation checklist updated: EVALUATIONS.md presence required, 3+ scenarios, should-NOT-trigger
+- Interview JSON examples moved from SKILL.md to reference.md (line budget recovery)
+- Interview section condensed to summary table with reference.md link
+
 ## [3.1.0] - 2026-02-05
 
 ### Added

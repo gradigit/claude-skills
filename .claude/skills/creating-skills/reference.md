@@ -5,10 +5,14 @@ Detailed best practices and patterns from official Anthropic documentation.
 ## Contents
 
 - Frontmatter specification (required + optional fields)
-- Adaptive interview methodology
+- Advanced frontmatter fields
+- Adaptive interview methodology (full JSON schemas)
 - Evaluation-first development
+- Agent-as-a-Judge evaluation methodology
+- Success criteria framework
 - Content guidelines
 - Progressive disclosure patterns
+- Nested directory discovery
 - Model-specific authoring
 - MCP tool integration
 - Common patterns
@@ -58,6 +62,30 @@ allowed-tools: Read Grep Glob                    # Simple tools
 allowed-tools: Bash(python:*) Bash(npm:*)        # Bash with patterns
 allowed-tools: mcp__github__create_issue         # MCP tools
 ```
+
+---
+
+## Advanced Frontmatter Fields
+
+Beyond the basic fields, these control skill behavior at runtime:
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `argument-hint` | string | none | Shown in `/help` output: `/skill-name [hint]` |
+| `user-invocable` | boolean | `true` | Whether users can invoke via `/skill-name` |
+| `disable-model-invocation` | boolean | `false` | Prevent Claude from auto-activating this skill |
+| `model` | string | inherited | Lock skill to specific model (`haiku`, `sonnet`, `opus`) |
+| `context` | string | `shared` | `shared` (default) or `fork` (isolated execution) |
+| `agent` | string | none | `background` to run as background agent |
+| `hooks` | object | none | Lifecycle hooks (e.g., `PostToolUse` handlers) |
+| `metadata.category` | string | none | Organizational grouping (e.g., `meta-tooling`, `session`) |
+
+### When to Use Each Field
+
+- **`argument-hint`**: Slash-command skills that take parameters (e.g., `/study [topic]`)
+- **`disable-model-invocation`**: Dangerous skills that should only run when explicitly invoked
+- **`context: fork`**: Skills that modify state or run tests in isolation
+- **`model`**: Skills that need specific model capabilities (e.g., Opus for complex reasoning)
 
 ---
 
@@ -176,6 +204,67 @@ Save as `{skill-name}/EVALUATIONS.md`:
 4. Repeat until all pass
 5. Run all scenarios together (regression)
 ```
+
+---
+
+## Agent-as-a-Judge Evaluation
+
+For subjective quality checks, use Agent-as-a-Judge instead of manual review. Research shows 0.3% disagreement rate with humans (vs 31% for raw LLM-as-Judge).
+
+### Protocol
+
+1. Run the skill on a test prompt
+2. Feed the output to a separate Claude instance with a rubric
+3. The judge evaluates against specific criteria (not open-ended)
+4. Score on a defined scale (e.g., 1-5 or pass/fail per criterion)
+
+### When to Use
+
+| Check Type | Method |
+|------------|--------|
+| Output format matches template | Code-based (deterministic) |
+| Correct files created/modified | Code-based (deterministic) |
+| Quality of generated content | Agent-as-a-Judge |
+| Appropriate tone/style | Agent-as-a-Judge |
+| Correct tool selection | Agent-as-a-Judge |
+
+### Hybrid Grading Decision Table
+
+| Criterion | Deterministic? | Method |
+|-----------|---------------|--------|
+| File exists at expected path | Yes | Code check |
+| Frontmatter has required fields | Yes | Code check |
+| Output follows template structure | Partially | Code for structure, Agent for content |
+| Generated skill is well-written | No | Agent-as-a-Judge |
+| Skill activates on trigger phrase | No | Agent-as-a-Judge via CLI test |
+
+---
+
+## Success Criteria Framework
+
+Define success criteria for each evaluation scenario:
+
+| Type | Example | Verification |
+|------|---------|-------------|
+| **Quantitative** | "Creates exactly 3 files" | Count files created |
+| **Structural** | "SKILL.md has frontmatter with name, description" | Parse and validate |
+| **Behavioral** | "Asks user 2-4 questions before generating" | Observe interaction |
+| **Qualitative** | "Generated description is specific, not vague" | Agent-as-a-Judge |
+| **Negative** | "Does NOT activate when user says 'audit my skill'" | Observe non-activation |
+
+---
+
+## Nested Directory Discovery
+
+For monorepos or projects with skills in non-standard locations, Claude discovers skills in:
+
+```
+.claude/skills/           # Standard location
+~/.claude/skills/         # Global skills
+<project>/.claude/skills/ # Project-level
+```
+
+Skills in nested directories are discovered recursively. Each subdirectory with a SKILL.md is treated as an independent skill.
 
 ---
 

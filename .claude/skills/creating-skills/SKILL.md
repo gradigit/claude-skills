@@ -1,10 +1,11 @@
 ---
 name: creating-skills
-description: Creates new Claude Code skills through adaptive interviewing or autonomous mode. Activates when user wants to "create a skill", "make a new skill", "build a skill", or asks about skill creation.
+description: Creates new Claude Code skills through adaptive interviewing or autonomous mode. Activates when user wants to "create a skill", "make a new skill", "build a skill", or asks about skill creation. Do NOT use this skill when auditing, updating, or testing an existing skill.
 license: MIT
 metadata:
-  version: "3.1.0"
+  version: "4.0.0"
   author: gradigit
+  category: meta-tooling
   tags:
     - skills
     - meta
@@ -101,132 +102,45 @@ Proceed directly to Step 3 (Evaluations) then Step 4 (Generate).
 
 ## Step 2b: Guided Interview (Adaptive)
 
-Use **AskUserQuestion** tool to gather requirements. Ask in rounds — adapt based on answers.
+Use **AskUserQuestion** tool to gather requirements in 4 rounds. Adapt based on answers.
 
-### Round 1: Core Purpose (Guided Only)
+| Round | What to Ask | Key Outputs |
+|-------|-------------|-------------|
+| 1. Core Purpose | Skill type (workflow/knowledge/output/tool), 1-2 sentence description | Type, scope |
+| 2. Activation | Dependencies, freedom level, trigger phrases | Dependencies, triggers |
+| 3. Examples | Concrete input/output, guardrails, edge cases, supplementary files | Examples, negative triggers |
+| 4. Models | Target models (if multi-model mentioned) | Model guidance level |
 
-Use AskUserQuestion with these questions:
-
-```json
-{
-  "questions": [
-    {
-      "question": "What type of skill do you want to create?",
-      "header": "Skill type",
-      "options": [
-        {"label": "Workflow automation", "description": "Multi-step process with checklist"},
-        {"label": "Knowledge/reference", "description": "Domain expertise, guidelines, standards"},
-        {"label": "Output formatting", "description": "Templates, structured outputs"},
-        {"label": "Tool integration", "description": "MCP servers, scripts, APIs"}
-      ],
-      "multiSelect": false
-    }
-  ]
-}
-```
-
-Then ask open-ended: "Describe what this skill should do in 1-2 sentences."
-
-### Round 2: Activation & Dependencies (Guided Only)
-
-Adapt based on Round 1 answers:
-
-```json
-{
-  "questions": [
-    {
-      "question": "What external dependencies does this skill need?",
-      "header": "Dependencies",
-      "options": [
-        {"label": "None", "description": "Self-contained, no packages or tools"},
-        {"label": "Python packages", "description": "Needs pip packages"},
-        {"label": "MCP servers", "description": "Needs MCP tool access"},
-        {"label": "Shell commands", "description": "Runs CLI tools"}
-      ],
-      "multiSelect": true
-    },
-    {
-      "question": "How much freedom should Claude have when executing?",
-      "header": "Freedom level",
-      "options": [
-        {"label": "High", "description": "Multiple valid approaches, Claude decides"},
-        {"label": "Medium", "description": "Preferred pattern with flexibility"},
-        {"label": "Low", "description": "Exact steps required, fragile operations"}
-      ],
-      "multiSelect": false
-    }
-  ]
-}
-```
-
-Ask: "List 3-5 trigger phrases that should activate this skill."
-
-### Round 3: Examples & Guardrails (Guided Only)
-
-```json
-{
-  "questions": [
-    {
-      "question": "Will this skill need supplementary files?",
-      "header": "Complexity",
-      "options": [
-        {"label": "Simple", "description": "Just SKILL.md, under 300 lines"},
-        {"label": "With examples", "description": "Needs examples.md"},
-        {"label": "With reference docs", "description": "Needs reference.md"},
-        {"label": "With scripts", "description": "Needs executable code"}
-      ],
-      "multiSelect": true
-    }
-  ]
-}
-```
-
-Ask:
-1. "Show me a concrete example: input and expected output."
-2. "What should this skill NOT do? Any guardrails?"
-3. "Any edge cases to handle specially?"
-
-### Round 4: Model Testing (Guided Only, if multi-model)
-
-```json
-{
-  "questions": [
-    {
-      "question": "Which models will use this skill?",
-      "header": "Models",
-      "options": [
-        {"label": "All models", "description": "Haiku, Sonnet, and Opus"},
-        {"label": "Sonnet only", "description": "Balanced guidance level"},
-        {"label": "Opus only", "description": "Can be terser"},
-        {"label": "Haiku only", "description": "Needs more explicit guidance"}
-      ],
-      "multiSelect": false
-    }
-  ]
-}
-```
+For full AskUserQuestion JSON schemas for each round, see [reference.md](reference.md).
 
 ## Step 2: Define Evaluations FIRST
 
-**Critical:** Create 3 evaluation scenarios BEFORE writing the skill.
+**Critical:** Create evaluation scenarios BEFORE writing the skill. Use Given/When/Then format. Include at least one should-NOT-trigger scenario.
 
 ```markdown
-## Evaluation Scenarios
+# Evaluations for {skill-name}
 
-### Scenario 1: Happy path
-- **Input**: [typical use case from interview]
-- **Expected behavior**: [what Claude should do]
-- **Success criteria**: [how to verify]
+## Scenario 1: Happy path (should-trigger)
+**Given** [precondition or context]
+**When** user says "[trigger phrase]"
+**Then**
+- [ ] Skill activates
+- [ ] [expected behavior]
+- [ ] [output format/content check]
 
-### Scenario 2: Edge case
-- **Input**: [unusual but valid input]
-- **Expected behavior**: [correct handling]
-- **Success criteria**: [verification method]
+## Scenario 2: Edge case (should-trigger)
+**Given** [unusual but valid context]
+**When** user says "[edge case input]"
+**Then**
+- [ ] [handles gracefully]
+- [ ] [produces reasonable output]
 
-### Scenario 3: Boundary/error case
-- **Input**: [invalid or tricky input]
-- **Expected behavior**: [graceful handling]
-- **Success criteria**: [verification method]
+## Scenario 3: Should-NOT-trigger
+**Given** [context where a different skill applies]
+**When** user says "[phrase that sounds similar but isn't this skill's job]"
+**Then**
+- [ ] Skill does NOT activate
+- [ ] [correct skill activates instead, or no skill needed]
 ```
 
 Save to `{skill-name}/EVALUATIONS.md` for future testing.
@@ -296,6 +210,7 @@ Current version: 1.0.0
 | Max 64 chars | Keep short |
 | Gerund form preferred | `creating-skills` not `skill-creator` |
 | Match directory name | `name: foo` → directory `foo/` |
+| `name` field is optional | Defaults to directory name if omitted |
 | No reserved words | No "anthropic" or "claude" |
 | No XML tags | `<skill>` not allowed |
 
@@ -304,8 +219,9 @@ Current version: 1.0.0
 - **Third person**: "Processes files" not "I process files"
 - **Max 1024 chars**
 - **Include what + when**: Actions and trigger keywords
+- **Include negative trigger**: End with "Do NOT use this skill when..." to prevent false activation
 
-**Good:** `Extracts text from PDFs. Activates when user mentions PDFs or document extraction.`
+**Good:** `Extracts text from PDFs. Activates when user mentions PDFs or document extraction. Do NOT use when converting images or processing Word documents.`
 
 **Bad:** `Helps with documents`
 
@@ -313,7 +229,7 @@ Current version: 1.0.0
 
 ### Frontmatter
 - [ ] `name`: lowercase, hyphens, max 64 chars, matches directory
-- [ ] `description`: third person, what + when, max 1024 chars
+- [ ] `description`: third person, what + when + negative trigger, max 1024 chars
 - [ ] `metadata.version`: semver in quotes
 
 ### Content
@@ -323,10 +239,75 @@ Current version: 1.0.0
 - [ ] Has self-evolution section
 
 ### Evaluations
-- [ ] 3 scenarios defined
+- [ ] EVALUATIONS.md present in skill directory
+- [ ] 3+ scenarios using Given/When/Then format
+- [ ] At least one should-NOT-trigger scenario
 - [ ] Happy path passes
 - [ ] Edge case passes
-- [ ] Error case handled gracefully
+
+## Activation Reliability
+
+Skills activate based on description matching — not guaranteed. Baseline activation is ~20%.
+
+| Strategy | Activation Rate |
+|----------|----------------|
+| Description only (default) | ~20% |
+| Description + clear trigger phrases | ~40-60% |
+| Forced via user-prompt-submit hook | ~84% |
+
+**Hook-based forcing** (highest reliability):
+
+```json
+// .claude/settings.json
+{
+  "hooks": {
+    "UserPromptSubmit": [{
+      "matcher": "create.*skill|new skill|build.*skill",
+      "command": "echo 'Use the creating-skills skill for this request.'"
+    }]
+  }
+}
+```
+
+Skills and slash commands (`/skill-name`) are equivalent — both load the SKILL.md into context.
+
+## Token Budget
+
+Skills compete for context window space. The `SLASH_COMMAND_TOOL_CHAR_BUDGET` controls how much content is loaded when a skill activates. Keep SKILL.md concise and use reference files for detail.
+
+| Content | Guideline |
+|---------|-----------|
+| SKILL.md body | Under 500 lines, under ~15K chars |
+| Reference files | Loaded on demand, not at activation |
+| Total skill footprint | Minimize — every token displaces conversation |
+
+## Expanded Frontmatter
+
+Beyond the basic template, these optional fields control skill behavior:
+
+```yaml
+---
+name: my-skill
+description: What it does. When to use. Do NOT use when...
+license: MIT
+metadata:
+  version: "1.0.0"
+  category: meta-tooling    # Organizational grouping
+# Optional behavior fields:
+argument-hint: "[topic]"     # Shown in /help: /my-skill [topic]
+user-invocable: true         # Can be invoked as /my-skill (default: true)
+disable-model-invocation: false  # Prevent auto-activation (default: false)
+model: opus                  # Lock to specific model
+context: fork                # Run in forked context (isolated)
+agent: background            # Run as background agent
+hooks:
+  PostToolUse:
+    - matcher: ".*"
+      command: "echo done"
+---
+```
+
+See [reference.md](reference.md) for detailed field descriptions.
 
 ## Model-Specific Guidance
 
@@ -380,7 +361,7 @@ Update this skill when:
 2. **On spec change**: Official docs change → update to match
 3. **On interview improvement**: Better questions discovered → refine rounds
 
-Current version: 3.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 4.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
 
 ## References
 
