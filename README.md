@@ -54,7 +54,7 @@ If you're using Claude, you can paste this repo URL into the chat and ask Claude
 
 1. Read all `SKILL.md` files under `.claude/skills/` in this repo (fetch from GitHub if not cloned locally). Parse the `name`, `description`, and `metadata.tags` from each frontmatter.
 2. Group skills by tag and present them to the user with their descriptions. For each skill, note whether it is already installed at `~/.claude/skills/{name}/` and if so, the installed version vs. the repo version.
-3. Ask the user which skills to install. Accept: individual names, tag groups (e.g. "all session management skills"), or "all".
+3. Ask the user which skills to install. Use the `AskUserQuestion` tool with `multiSelect: true` if available — list each skill as an option with its description. Otherwise ask in plain text. Accept individual names, tag groups (e.g. "all session management skills"), or "all".
 4. Warn about dependencies: if the user selects `wrap`, note it also needs `handoff`, `syncing-docs`, and `managing-doc-manifest`. If they select `updating-skills`, note it works best alongside `auditing-skills` and `testing-skills`.
 5. For each selected skill, copy the skill directory to `~/.claude/skills/{name}/`. If a version is already installed, confirm before overwriting.
 6. After installing, confirm what was installed and the slash command to invoke each (e.g. `/handoff`, `/study`).
