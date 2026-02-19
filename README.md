@@ -32,7 +32,7 @@ Claude Code sessions are ephemeral, but project context shouldn't be. These skil
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [study](.claude/skills/study/) | 1.0.0 | Structured web research with source verification and hypothesis tracking |
+| [study](.claude/skills/study/) | 1.2.0 | Structured web research with source verification and hypothesis tracking |
 
 Standalone skill. No dependencies on other skills in this collection.
 
