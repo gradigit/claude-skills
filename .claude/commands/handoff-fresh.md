@@ -5,6 +5,7 @@ Run the `handoff-fresh` skill as an explicit manual command.
 ## Contract
 - Trigger only from explicit user invocation (`/handoff-fresh`)
 - Produce fork-safe fresh-agent onboarding bundle under `.handoff-fresh/current/` (default)
+- Default ignore policy should keep `HANDOFF.md` + `.handoff-fresh/` out of untracked noise via `--ignore-mode local` unless user requests `shared` or `off`
 - Required outputs in bundle: `claude.md`, `agents.md`, `todo.md`, `handoff.md`, `context.md`, `reports.md`, `artifacts.md`, `state.md`, `prior-plans.md`, `read-receipt.md`, `session-log-digest.md`, `session-log-chunk.md`, `handoff-everything.md`
 - Root `HANDOFF.md` should be updated with a bridge pointer to `.handoff-fresh/current/handoff.md`
 - Root `HANDOFF.md` bridge should treat "read HANDOFF.md" as bootstrap and force immediate switch to bundle handoff

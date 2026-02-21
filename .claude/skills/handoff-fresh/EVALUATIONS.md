@@ -10,6 +10,7 @@
 - [ ] Generates required files in `.handoff-fresh/current/`
 - [ ] Generates `.handoff-fresh/current/handoff-everything.md`
 - [ ] Includes project context, history, prior plans, and current status across output files
+- [ ] `.git/info/exclude` contains `HANDOFF.md` and `.handoff-fresh/` by default (`--ignore-mode local`)
 
 ## Scenario 2: Edge case — no git repo (should-trigger, functional)
 
@@ -117,3 +118,11 @@
 - [ ] Agent treats request as bootstrap and immediately switches to `.handoff-fresh/current/handoff.md`
 - [ ] Agent completes bundle Read Gate before substantive reply
 - [ ] Agent does not stop after summarizing root bridge file only
+
+## Scenario 13: Edge case — shared ignore mode (should-trigger, functional)
+
+**Given** a git project where user requests `/handoff-fresh --ignore-mode shared`
+**When** fresh bundle generation runs
+**Then**
+- [ ] `.gitignore` contains `HANDOFF.md` and `.handoff-fresh/`
+- [ ] Bundle and root bridge generation still succeed

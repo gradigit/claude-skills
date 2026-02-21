@@ -19,8 +19,8 @@ These four form a lifecycle: create a skill, update it as you iterate, audit it 
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [handoff](.claude/skills/handoff/) | 2.4.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off |
-| [handoff-fresh](.claude/skills/handoff-fresh/) | 1.8.0 | Builds a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repos |
+| [handoff](.claude/skills/handoff/) | 2.5.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off (defaults to local git-ignore for handoff artifacts) |
+| [handoff-fresh](.claude/skills/handoff-fresh/) | 1.9.0 | Builds a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repos (defaults to local git-ignore for bundle artifacts) |
 | [syncing-docs](.claude/skills/syncing-docs/) | 2.6.0 | Detects drift between code and project state files, fixes owned docs (CLAUDE.md + AGENTS.md) |
 | [managing-doc-manifest](.claude/skills/managing-doc-manifest/) | 1.0.0 | Creates `.doc-manifest.yaml` — a registry of docs and their code references |
 | [wrap](.claude/skills/wrap/) | 1.3.0 | End-of-session coordinator: sync docs, run instruction-doc quality pass (CLAUDE.md + AGENTS.md), then handoff (optional fresh bundle) |
@@ -86,7 +86,7 @@ Ask (single select):
 [ ] Install skills I don't have yet
 [ ] Both
 ```
-Show a version diff before proceeding, e.g.: "`handoff` 2.3.0 → 2.4.0 · `syncing-docs` 2.5.0 → 2.6.0 · `handoff-fresh` 1.7.0 → 1.8.0"
+Show a version diff before proceeding, e.g.: "`handoff` 2.4.0 → 2.5.0 · `syncing-docs` 2.5.0 → 2.6.0 · `handoff-fresh` 1.8.0 → 1.9.0"
 
 **Step 4 — Detail level**
 
@@ -125,7 +125,7 @@ Before installing, auto-resolve dependencies:
 
 **Step 8 — Install**
 
-Copy each selected skill directory to the chosen location. For each skill being overwritten, show the version change (e.g. `handoff` 2.3.0 → 2.4.0).
+Copy each selected skill directory to the chosen location. For each skill being overwritten, show the version change (e.g. `handoff` 2.4.0 → 2.5.0).
 
 Also copy matching command entry files from `.claude/commands/` when present (for example `handoff.md`, `handoff-fresh.md`, `wrap.md`) so slash-command paths stay explicit.
 
@@ -193,6 +193,7 @@ study (standalone)
 
 - `syncing-docs` checks for an `architect/` directory (created by [forging-plans](https://github.com/gradigit/forging-workflow)). If it doesn't exist, this is silently skipped.
 - `handoff` references CLAUDE.md, AGENTS.md, TODO.md, and `architect/` files if present. None are required.
+- `handoff` and `handoff-fresh` default to `--ignore-mode local`, which writes `HANDOFF.md` and `.handoff-fresh/` into `.git/info/exclude` (local-only ignore). Use `--ignore-mode shared` to write ignore entries to `.gitignore`, or `--ignore-mode off` to disable.
 - `handoff-fresh` emits a fresh-agent bundle at `.handoff-fresh/current/` by default: `claude.md`, `agents.md`, `todo.md`, `handoff.md`, `context.md`, `reports.md`, `artifacts.md`, `state.md`, `prior-plans.md`, `read-receipt.md`, `session-log-digest.md`, `session-log-chunk.md`, `handoff-everything.md`. It also updates root `HANDOFF.md` as a bridge pointer to bundle handoff, supports an agent-internal `--validate-read-gate` preflight check before coding, enforces shared-context parity between bundle `claude.md` and `agents.md`, and keeps log continuity token-budgeted.
 
 ## Customization

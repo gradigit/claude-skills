@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.9.0] - 2026-02-22
+
+### Added
+- `--ignore-mode <local|shared|off>` argument to control handoff artifact ignore policy
+- Default local ignore behavior for `HANDOFF.md` and `.handoff-fresh/` to reduce untracked-noise during normal development
+
+### Changed
+- Bundle validation now checks ignore-entry presence when ignore mode is enabled
+
 ## [1.8.0] - 2026-02-21
 
 ### Changed

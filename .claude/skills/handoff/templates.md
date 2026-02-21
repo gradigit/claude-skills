@@ -71,6 +71,7 @@ Handoff complete.
 Files updated:
 - HANDOFF.md (created/updated)
 - {other files updated}
+- Ignore policy: {local|shared|off} ({.git/info/exclude|.gitignore|none})
 
 To continue:
 1. /clear to reset context

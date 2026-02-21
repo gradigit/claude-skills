@@ -1,11 +1,11 @@
 ---
 name: handoff
-description: Creates context handoff files that preserve session state for seamless continuation after /clear. Manual command entry point is /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions. Use handoff-fresh for brand-new/forked-repo onboarding bundles.
+description: Creates context handoff files that preserve session state for seamless continuation after /clear. Manual command entry point is /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions. Defaults to local git-ignore for handoff artifacts so they do not pollute working tree status. Use handoff-fresh for brand-new/forked-repo onboarding bundles.
 license: MIT
 metadata:
-  version: "2.4.0"
+  version: "2.5.0"
   author: gradigit
-  updated: "2026-02-21"
+  updated: "2026-02-22"
   tags:
     - context
     - handoff
@@ -48,10 +48,19 @@ Creates context handoff files for seamless session continuation after `/clear`.
 When the session was short or the task was small (bug fix, config change, single-file edit), use the quick path:
 
 1. `git status` — commit if needed
-2. Generate HANDOFF.md using the quick template from [templates.md](templates.md)
-3. Output confirmation
+2. Apply handoff artifact ignore policy (`--ignore-mode`, default local)
+3. Generate HANDOFF.md using the quick template from [templates.md](templates.md)
+4. Output confirmation
 
-**Use quick mode when**: user says "quick handoff", session touched fewer than 3 files, or the task was a single focused change. Skip Steps 2-4 of the full workflow.
+**Use quick mode when**: user says "quick handoff", session touched fewer than 3 files, or the task was a single focused change. Skip the full Step 2-4 deep pass (except apply ignore policy).
+
+## Arguments
+
+- `--quick`: Use quick mode template/flow
+- `--ignore-mode <local|shared|off>`: How to ignore handoff artifacts
+  - `local` (default): update `.git/info/exclude`
+  - `shared`: update `.gitignore`
+  - `off`: skip ignore updates
 
 ## Step 1: Assess Current State
 
@@ -75,6 +84,9 @@ Handle edge cases before proceeding:
 | **No CLAUDE.md** | Create a minimal one with project name, key files, and current phase. |
 | **No AGENTS.md** | If CLAUDE.md exists, create minimal AGENTS.md mirror for agent parity; otherwise note missing instruction-doc parity in HANDOFF.md blockers. |
 | **No TODO.md** | Skip TODO updates. List next steps directly in HANDOFF.md. |
+| **Git repo + ignore mode `local` (default)** | Ensure `.git/info/exclude` contains `HANDOFF.md` and `.handoff-fresh/`. |
+| **Git repo + ignore mode `shared`** | Ensure `.gitignore` contains `HANDOFF.md` and `.handoff-fresh/`. |
+| **Ignore mode `off`** | Do not edit ignore files. Note handoff artifacts may appear as untracked. |
 | **Merge conflicts** | Note conflicts in handoff under "Blockers". Do NOT attempt to resolve. |
 | **User says no commit** | Skip Step 3. Note "Uncommitted changes exist" in handoff with file list. |
 | **Dirty submodules** | Ignore submodule changes. Note in handoff if relevant. |
@@ -170,6 +182,7 @@ Before confirming, verify:
 - [ ] No placeholder text left unfilled (no `{...}` remaining)
 - [ ] If both CLAUDE.md and AGENTS.md exist, shared project context is not contradictory
 - [ ] HANDOFF.md includes bootstrap read rule and no-interim-summary first-response contract
+- [ ] If in git repo and `--ignore-mode` is not `off`, selected ignore file contains `HANDOFF.md` and `.handoff-fresh/`
 
 Then output the confirmation using the template from [templates.md](templates.md).
 
@@ -294,6 +307,7 @@ Update this skill when:
 
 **Applied Learnings:**
 
+- v2.5.0: Added handoff-artifact ignore policy (`--ignore-mode local|shared|off`, default local) so `HANDOFF.md` and `.handoff-fresh/` do not show up as noisy untracked files.
 - v2.4.0: Added mandatory bootstrap read rule in HANDOFF.md so "read handoff.md" prompts automatically trigger full First Steps reading before reply.
 - v2.2.0: Added explicit manual command contract for `/handoff`; clarified separation of responsibilities between `/handoff` (standard continuity) and `/handoff-fresh` (fork-safe fresh onboarding bundle).
 - v2.3.0: Added AGENTS.md-aware behavior for prerequisite checks, instruction-doc parity updates, and HANDOFF validation so Codex/Claude continuity remains aligned.
@@ -301,4 +315,4 @@ Update this skill when:
 - v2.0.0: Renamed from handing-off. Fixed frontmatter. Added edge case handling, pitfalls table, git ops table, validation step, concrete example. Extracted templates to templates.md.
 - v1.0.0: Initial version based on forging-plans handoff pattern and external best practices
 
-Current version: 2.4.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 2.5.0. See [CHANGELOG.md](CHANGELOG.md) for history.

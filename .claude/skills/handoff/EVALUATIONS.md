@@ -13,6 +13,7 @@
 - [ ] HANDOFF.md First Steps includes both CLAUDE.md and AGENTS.md when both exist
 - [ ] HANDOFF.md includes bootstrap read rule and first-response read-receipt contract
 - [ ] All file paths in HANDOFF.md point to files that actually exist
+- [ ] `.git/info/exclude` contains `HANDOFF.md` and `.handoff-fresh/` by default (`--ignore-mode local`)
 - [ ] Outputs confirmation with commit hash and instructions
 
 ## Scenario 2: Edge case — no git repo (should-trigger, functional)
@@ -58,3 +59,11 @@
 - [ ] Agent treats request as bootstrap and continues to read all First Steps files before replying
 - [ ] Agent does not send one-file interim summary
 - [ ] Agent's first substantive reply includes per-file read receipt with one-line takeaways
+
+## Scenario 7: Edge case — shared ignore mode (should-trigger, functional)
+
+**Given** a git project where user requests `/handoff --ignore-mode shared`
+**When** handoff runs
+**Then**
+- [ ] `.gitignore` contains `HANDOFF.md` and `.handoff-fresh/`
+- [ ] `.git/info/exclude` is not required for correctness in this mode

@@ -1,11 +1,11 @@
 ---
 name: handoff-fresh
-description: Generates a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repositories. Manual command entry point is /handoff-fresh. Produces structured context/history/status files plus full handoff-everything output in .handoff-fresh/current. Do NOT use when only standard HANDOFF.md continuity is needed.
+description: Generates a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repositories. Manual command entry point is /handoff-fresh. Produces structured context/history/status files plus full handoff-everything output in .handoff-fresh/current. Defaults to local git-ignore for handoff artifacts (`HANDOFF.md`, `.handoff-fresh/`) to avoid untracked noise. Do NOT use when only standard HANDOFF.md continuity is needed.
 license: MIT
 metadata:
-  version: "1.8.0"
+  version: "1.9.0"
   author: gradigit
-  updated: "2026-02-21"
+  updated: "2026-02-22"
   tags:
     - handoff
     - onboarding
@@ -35,7 +35,7 @@ Creates a complete, fork-safe onboarding bundle so a brand-new agent can continu
 
 ```
 - [ ] 1. Detect project root and bundle path
-- [ ] 2. Archive previous bundle snapshot (optional)
+- [ ] 2. Apply handoff artifact ignore policy (default local) and archive previous bundle snapshot (optional)
 - [ ] 3. Run prerequisite sync (unless --no-sync)
 - [ ] 4. Collect source context, history, and state
 - [ ] 5. Generate canonical bundle handoff.md
@@ -53,6 +53,10 @@ Creates a complete, fork-safe onboarding bundle so a brand-new agent can continu
 - `--no-sync`: Skip `/sync-docs` prerequisite (use only when sync already done)
 - `--archive`: Move current bundle to `.handoff-fresh/archive/<timestamp>/` before regenerating
 - `--dry-run`: Show planned files/sections without writing
+- `--ignore-mode <local|shared|off>`: How to ignore handoff artifacts (`HANDOFF.md`, `.handoff-fresh/`)
+  - `local` (default): update `.git/info/exclude`
+  - `shared`: update `.gitignore`
+  - `off`: skip ignore updates
 - `--validate-read-gate`: Agent-internal preflight mode to validate completed `read-receipt.md` and fail fast if any required item is unchecked or missing takeaway
 - `--log-token-budget <n>`: Total token budget for session-log continuity payload (default: 12000)
 - `--log-digest-max <n>`: Max tokens for `session-log-digest.md` (default: 4000)
@@ -96,7 +100,15 @@ Resolve bundle output path:
 - Default: `<project-root>/.handoff-fresh/current`
 - If `--output` set: use that path (absolute or project-root relative)
 
-## Step 2: Archive previous bundle snapshot (optional)
+## Step 2: Apply ignore policy + archive previous bundle snapshot (optional)
+
+If in a git repository, apply ignore policy before generating artifacts:
+
+- `--ignore-mode local` (default): ensure `.git/info/exclude` contains:
+  - `HANDOFF.md`
+  - `.handoff-fresh/`
+- `--ignore-mode shared`: ensure `.gitignore` contains the same entries
+- `--ignore-mode off`: skip ignore updates (artifacts may show as untracked)
 
 If `--archive` is set and current bundle exists:
 
@@ -304,6 +316,7 @@ Before confirmation, verify:
 - [ ] Shared block content in `claude.md` and `agents.md` is byte-identical
 - [ ] `session-log-digest.md` and `session-log-chunk.md` exist (or explicit unavailable note)
 - [ ] Combined session-log payload is within configured token budget
+- [ ] If in git repo and `--ignore-mode` is not `off`, selected ignore file contains `HANDOFF.md` and `.handoff-fresh/`
 
 ## Step 10: Confirm completion
 
@@ -312,6 +325,7 @@ Output:
 - Bundle output path used
 - Files generated
 - Root bridge status (`HANDOFF.md` updated or created)
+- Ignore policy result (`local` / `shared` / `off`, and target file updated if applicable)
 - Recommended next prompt for fresh agent:
   - "Read .handoff-fresh/current/handoff.md, complete Read Gate fully before replying (no interim summary), run Read Gate preflight validator, then run Workspace Preparation. Use session-log-digest.md first if extra historical context is needed."
 
@@ -356,6 +370,7 @@ Update this skill when:
 4. Users report ambiguity between `/handoff` and `/handoff-fresh`
 
 **Applied Learnings:**
+- v1.9.0: Added explicit handoff-artifact ignore policy (`--ignore-mode local|shared|off`, default local) so fresh-bundle outputs and bridge `HANDOFF.md` do not pollute git status by default.
 - v1.8.0: Strengthened root HANDOFF bridge wording so "read HANDOFF.md" is treated as bootstrap and forces immediate switch to bundle Read Gate before reply.
 - v1.7.0: Added token-budgeted session-log continuity artifacts (`session-log-digest.md` + `session-log-chunk.md`) with high-signal selection rules to improve continuity without flooding context windows.
 - v1.6.0: Added mandatory `claude.md`/`agents.md` shared-context parity contract using SHARED-ONBOARDING-CONTEXT marker blocks and byte-identical validation.

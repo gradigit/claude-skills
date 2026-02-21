@@ -165,3 +165,12 @@ If workspace prep is blocked or ambiguous, use ask-question before coding.
 - Relative: `.handoff-fresh/current/session-log-chunk.md`
 - Token budget: `{configured_budget}` / Actual estimate: `{actual_estimate}`
 ```
+
+## completion summary ignore-policy line
+
+```markdown
+## Ignore Policy
+- Mode: `{local|shared|off}`
+- Target file: `{.git/info/exclude|.gitignore|none}`
+- Entries: `HANDOFF.md`, `.handoff-fresh/`
+```
