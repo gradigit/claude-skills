@@ -1,15 +1,16 @@
 ---
 name: syncing-docs
-description: Detects drift between code and all project state files. Fixes docs it owns (CLAUDE.md, README.md, ARCHITECTURE.md). Flags inconsistencies in files owned by other skills (TODO.md, HANDOFF.md, architect/). Captures session learnings into CLAUDE.md. Activates when user asks to "sync docs", "update docs", "refresh docs", or after significant code changes. Supports --dry-run and --quick modes.
+description: Detects drift between code and all project state files. Fixes docs it owns (CLAUDE.md, AGENTS.md, README.md, ARCHITECTURE.md). Flags inconsistencies in files owned by other skills (TODO.md, HANDOFF.md, architect/, handoff-fresh bundle files). Captures session learnings into CLAUDE.md and AGENTS.md. Activates when user asks to "sync docs", "update docs", "refresh docs", or uses /sync-docs. Supports --dry-run, --quick, and --refresh-fresh-bundle.
 license: MIT
 metadata:
-  version: "2.0.0"
+  version: "2.6.0"
   author: gradigit
   tags:
     - documentation
     - sync
     - drift-detection
   triggers:
+    - "/sync-docs"
     - "sync docs"
     - "update docs"
     - "refresh docs"
@@ -26,16 +27,18 @@ Detects drift between code and project state files. Fixes docs it owns, flags in
 - [ ] 2. Identify what changed since last sync
 - [ ] 3. Map changes to affected files
 - [ ] 4. Fix drift in owned docs (or preview if --dry-run)
-- [ ] 5. Capture session learnings into CLAUDE.md (skip if --quick)
+- [ ] 5. Capture session learnings into CLAUDE.md + AGENTS.md (skip if --quick)
 - [ ] 6. Cross-file consistency check (skip if --quick)
 - [ ] 7. Update .doc-manifest.yaml
-- [ ] 8. Show summary
+- [ ] 8. Refresh handoff-fresh bundle (optional)
+- [ ] 9. Show summary
 ```
 
 ## Arguments
 
 - `--dry-run`: Preview all changes without applying edits
 - `--quick`: Drift fix only — skip session learnings (step 5) and cross-file checks (step 6)
+- `--refresh-fresh-bundle`: After sync, run `/handoff-fresh --no-sync` so fresh-agent onboarding files are regenerated from latest docs/state
 - No args: Full sync — drift fix + session learnings + cross-file consistency
 
 ## File Ownership
@@ -45,12 +48,26 @@ This skill has two relationships with files: **owned** (can edit) and **watched*
 | File | Relationship | Owner Skill |
 |------|-------------|-------------|
 | CLAUDE.md (key files, commands, architecture, code style) | **Owned** | syncing-docs |
+| AGENTS.md (agent policies, command behavior, shared project context) | **Owned** | syncing-docs |
 | README.md | **Owned** | syncing-docs |
 | ARCHITECTURE.md, docs/ARCHITECTURE.md | **Owned** | syncing-docs |
 | docs/**/*.md | **Owned** | syncing-docs |
 | .doc-manifest.yaml | **Owned** | managing-doc-manifest (invoked) |
 | TODO.md | Watched | forging-plans / execution |
 | HANDOFF.md | Watched | handoff |
+| .handoff-fresh/current/claude.md | Watched | handoff-fresh |
+| .handoff-fresh/current/agents.md | Watched | handoff-fresh |
+| .handoff-fresh/current/todo.md | Watched | handoff-fresh |
+| .handoff-fresh/current/handoff.md | Watched | handoff-fresh |
+| .handoff-fresh/current/context.md | Watched | handoff-fresh |
+| .handoff-fresh/current/reports.md | Watched | handoff-fresh |
+| .handoff-fresh/current/artifacts.md | Watched | handoff-fresh |
+| .handoff-fresh/current/state.md | Watched | handoff-fresh |
+| .handoff-fresh/current/prior-plans.md | Watched | handoff-fresh |
+| .handoff-fresh/current/read-receipt.md | Watched | handoff-fresh |
+| .handoff-fresh/current/session-log-digest.md | Watched | handoff-fresh |
+| .handoff-fresh/current/session-log-chunk.md | Watched | handoff-fresh |
+| .handoff-fresh/current/handoff-everything.md | Watched | handoff-fresh |
 | architect/plan.md | Watched | forging-plans |
 | architect/prompt.md | Watched | forging-plans |
 
@@ -72,6 +89,7 @@ Scan for all project state files:
 
 **Owned docs:**
 - `CLAUDE.md` (project root + nested directories)
+- `AGENTS.md` (project root + nested directories)
 - `README.md`
 - `ARCHITECTURE.md`, `docs/ARCHITECTURE.md`
 - `docs/**/*.md`
@@ -115,14 +133,14 @@ Compare file modification times:
 
 | Changed File Pattern | Affected Doc Sections |
 |---------------------|----------------------|
-| `src/**/*.py`, `lib/**/*.js`, `src/**/*.ts` | CLAUDE.md (key files, architecture), ARCHITECTURE.md |
-| `tests/**/*`, `test/**/*` | CLAUDE.md (commands/testing) |
-| `*.yaml`, `*.json`, `*.toml` (config) | CLAUDE.md (configuration) |
-| `main.py`, `cli.py`, `index.*`, `app.*` | CLAUDE.md (commands), README.md (usage) |
+| `src/**/*.py`, `lib/**/*.js`, `src/**/*.ts` | CLAUDE.md + AGENTS.md (key files, architecture), ARCHITECTURE.md |
+| `tests/**/*`, `test/**/*` | CLAUDE.md + AGENTS.md (commands/testing) |
+| `*.yaml`, `*.json`, `*.toml` (config) | CLAUDE.md + AGENTS.md (configuration/policies) |
+| `main.py`, `cli.py`, `index.*`, `app.*` | CLAUDE.md + AGENTS.md (commands), README.md (usage) |
 | `requirements.txt`, `package.json`, `Cargo.toml`, `go.mod` | README.md (setup/installation) |
-| `Makefile`, `Taskfile.*`, `justfile`, `scripts/**` | CLAUDE.md (commands) |
+| `Makefile`, `Taskfile.*`, `justfile`, `scripts/**` | CLAUDE.md + AGENTS.md (commands) |
 | `Dockerfile`, `docker-compose.*`, `*.dockerfile` | README.md (setup), ARCHITECTURE.md |
-| `__init__.py`, `index.ts` (barrel files) | CLAUDE.md (architecture/exports) |
+| `__init__.py`, `index.ts` (barrel files) | CLAUDE.md + AGENTS.md (architecture/exports) |
 | `docs/**/*.md` | Cross-reference consistency between docs |
 
 ### Code Element Reference Tracking
@@ -165,7 +183,7 @@ If `--dry-run`: Skip Task agent. Output planned changes as preview.
 
 **Skip if `--quick`.**
 
-Reflect on the current session and add useful context to CLAUDE.md:
+Reflect on the current session and add useful context to instruction docs:
 
 ### What to capture
 - Bash commands that were used or discovered
@@ -180,14 +198,19 @@ Reflect on the current session and add useful context to CLAUDE.md:
 - Avoid verbose explanations, obvious information, one-off fixes unlikely to recur
 
 ### Placement
-- `CLAUDE.md` — team-shared learnings (checked into git)
+- `CLAUDE.md` — team-shared context and architecture learnings (checked into git)
+- `AGENTS.md` — agent-execution policy and workflow learnings (checked into git)
 - `.claude.local.md` — personal/local preferences (gitignored)
+
+If both CLAUDE.md and AGENTS.md exist:
+- Keep shared project context synchronized.
+- Allow platform-specific appendices only where explicitly needed.
 
 ### Approval
 Show proposed additions as diffs. Ask user before applying:
 
 ```
-### Session Learnings → CLAUDE.md
+### Session Learnings → CLAUDE.md + AGENTS.md
 
 **Why:** Discovered during this session
 
@@ -207,17 +230,22 @@ Scan watched files for issues without editing them.
 - File paths in TODO.md, HANDOFF.md, architect/*.md that no longer exist
 - Function/class names that were renamed or deleted
 - Commands that no longer work
+- Validate handoff-fresh bundle file set under `.handoff-fresh/current/`
 
 ### Cross-File Contradictions
 - TODO.md says "Phase 3 in progress" but CLAUDE.md says "Current Phase: 2"
+- TODO.md says "Phase 3 in progress" but AGENTS.md says "Current Phase: 2"
 - HANDOFF.md references files that were deleted since it was written
 - architect/plan.md step marked as next but TODO.md shows it completed
 - CLAUDE.md key files table missing files that TODO.md references as created
+- CLAUDE.md and AGENTS.md shared project context disagree on current phase/commands
+- `.handoff-fresh/current/claude.md` and `.handoff-fresh/current/agents.md` shared onboarding context block differs (fresh-agent context parity drift)
 
 ### Staleness Alerts
 - HANDOFF.md last modified > 10 commits ago → "Consider running /handoff"
 - TODO.md has items marked "in progress" for tasks that appear complete in code → flag
 - architect/plan.md references phase N but code appears to be past that → flag
+- handoff-fresh bundle under `.handoff-fresh/current/` present but older than source docs/state files → "Consider running /handoff-fresh"
 
 ### Output Format
 ```
@@ -238,7 +266,17 @@ Invoke the managing-doc-manifest skill (or update `.doc-manifest.yaml` directly)
 - Add any newly discovered doc files
 - Update `references` based on code files actually checked
 
-## Step 8: Show Summary
+## Step 8: Refresh handoff-fresh bundle (optional)
+
+Only if user explicitly requested `--refresh-fresh-bundle`:
+
+1. Run `/handoff-fresh --no-sync` in the same project root
+2. Confirm required bundle files were re-generated
+3. Include generated bundle output path in summary
+
+If not requested, do nothing.
+
+## Step 9: Show Summary
 
 ```
 === Docs Sync Summary ===
@@ -248,10 +286,13 @@ Drift Fixed:
     - Commands: added --strict flag documentation
     - Key Files: added src/validators/preflight.py
     - Fixed: tests/ → test/ path correction
+  AGENTS.md:
+    - Commands: mirrored --strict flag documentation
+    - Policies: synced shared project context with CLAUDE.md
 
 Session Learnings:
-  CLAUDE.md:
-    + Added 2 new entries (commands, gotcha)
+  CLAUDE.md + AGENTS.md:
+    + Added 2 synchronized entries (commands, gotcha)
 
 Cross-File Issues:
   TODO.md: 1 broken reference, 1 phase mismatch
@@ -262,6 +303,10 @@ Flagged for Review:
     - src/old_module.py deleted but still referenced (line 78)
 
 Manifest: .doc-manifest.yaml updated (5 files tracked)
+
+Fresh Bundle:
+  regenerated via /handoff-fresh --no-sync
+  output: ./.handoff-fresh/current/
 ```
 
 ## CLAUDE.md Sections to Maintain
@@ -273,6 +318,14 @@ Manifest: .doc-manifest.yaml updated (5 files tracked)
 | Architecture | Directory structure, module relationships, data flow |
 | Code Style | Language version, formatter config, conventions |
 | Domain Edge Cases | Special handling in code comments/logic |
+
+## AGENTS.md Sections to Maintain
+
+| Section | Synced From |
+|---------|------------|
+| Command Behavior | CLI entry points, workflow gates, execution constraints |
+| Shared Project Context | Aligned with CLAUDE.md shared context |
+| Agent Policies | Safety constraints, sequencing requirements, handoff protocol |
 
 ## Example
 
@@ -289,9 +342,12 @@ Drift Fixed:
     - Commands: added --strict flag
     - Key Files: added src/validators/preflight.py
     - Architecture: added preflight step to data flow
+  AGENTS.md:
+    - Commands: added --strict flag
+    - Shared context: synced with CLAUDE.md updates
 
 Session Learnings:
-  CLAUDE.md:
+  CLAUDE.md + AGENTS.md:
     + `pytest test/ -x --tb=short` - fast test with short traceback
 
 Cross-File Issues:
@@ -305,7 +361,7 @@ Manifest: .doc-manifest.yaml updated (2 files tracked)
 
 **Quick mode:** `/sync-docs --quick`
 
-Runs steps 1-4, 7-8 only. No session learnings, no cross-file checks.
+Runs steps 1-4, 7, 9. Step 8 runs only when `--refresh-fresh-bundle` is explicitly provided. No session learnings, no cross-file checks.
 
 ## Self-Evolution
 
@@ -316,5 +372,11 @@ Update this skill when:
 4. **On cross-file miss**: Inconsistency between files went undetected → add check to Step 6
 
 **Applied Learnings:**
-- v1.0.0: Initial version
+- v2.6.0: Added AGENTS.md as owned instruction doc and synchronized shared-context + session-learning maintenance across CLAUDE.md/AGENTS.md.
+- v2.5.0: Added watched-file coverage for handoff-fresh `session-log-digest.md` and `session-log-chunk.md` continuity artifacts.
+- v2.4.0: Added cross-file contradiction check for handoff-fresh `claude.md`/`agents.md` shared-context parity drift.
+- v2.3.0: Added `.handoff-fresh/current/read-receipt.md` to watched-file drift checks so sync-docs can flag incomplete fresh-agent Read Gate artifacts.
+- v2.2.0: Updated handoff-fresh bundle expectations to foldered model (`.handoff-fresh/current/`). Updated watched-file checks and summary output paths accordingly.
+- v2.1.0: Added explicit `/sync-docs` command trigger. Added `--refresh-fresh-bundle` to regenerate handoff-fresh onboarding files after sync. Added watched-file staleness checks for handoff-fresh bundle and `handoff-everything.md`.
 - v2.0.0: Merged session learnings capture from revise-claude-md. Added cross-file consistency checking for watched files (TODO.md, HANDOFF.md, architect/). Added code element reference tracking. Added --quick mode. Dropped template creation (scaffolding ≠ syncing). Added cumulative git history via manifest last_synced.
+- v1.0.0: Initial version

@@ -1,11 +1,11 @@
 ---
 name: handoff
-description: Creates context handoff files that preserve session state for seamless continuation after /clear. Activates when user says "handoff", "save context", "context handoff", "save progress", or types /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions.
+description: Creates context handoff files that preserve session state for seamless continuation after /clear. Manual command entry point is /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions. Use handoff-fresh for brand-new/forked-repo onboarding bundles.
 license: MIT
 metadata:
-  version: "2.1.0"
+  version: "2.4.0"
   author: gradigit
-  updated: "2026-02-07"
+  updated: "2026-02-21"
   tags:
     - context
     - handoff
@@ -23,6 +23,14 @@ metadata:
 # Handoff
 
 Creates context handoff files for seamless session continuation after `/clear`.
+
+## Command Contract (Explicit, Manual)
+
+- Primary entry point: `/handoff`
+- Secondary natural-language triggers are allowed when user intent is explicit
+- Do **not** rely on auto hooks or side-channel invocation
+- Scope: standard session continuity (`HANDOFF.md`)
+- If user requests fork-safe onboarding for a brand-new agent, run `/handoff-fresh` instead
 
 ## Workflow
 
@@ -53,7 +61,7 @@ Run these checks in parallel:
 |-------|---------|-----------------|
 | Uncommitted changes | `git status` | Modified/untracked files |
 | Change scope | `git diff --stat` | Which files changed |
-| Existing docs | Check filesystem | CLAUDE.md, TODO.md, HANDOFF.md |
+| Existing docs | Check filesystem | CLAUDE.md, AGENTS.md, TODO.md, HANDOFF.md |
 | Planning artifacts | Check filesystem | architect/ directory |
 | Project root | `pwd` | Current working directory |
 
@@ -65,6 +73,7 @@ Handle edge cases before proceeding:
 |-----------|--------|
 | **No git repo** | Skip Step 3. Note "No git — changes not committed" in handoff. |
 | **No CLAUDE.md** | Create a minimal one with project name, key files, and current phase. |
+| **No AGENTS.md** | If CLAUDE.md exists, create minimal AGENTS.md mirror for agent parity; otherwise note missing instruction-doc parity in HANDOFF.md blockers. |
 | **No TODO.md** | Skip TODO updates. List next steps directly in HANDOFF.md. |
 | **Merge conflicts** | Note conflicts in handoff under "Blockers". Do NOT attempt to resolve. |
 | **User says no commit** | Skip Step 3. Note "Uncommitted changes exist" in handoff with file list. |
@@ -86,13 +95,18 @@ If no changes or user declines, note in handoff and continue.
 
 ## Step 4: Update Documentation
 
-### CLAUDE.md
+### Instruction docs (CLAUDE.md + AGENTS.md)
 
 Update only if these sections exist:
 
 - **Current Phase** — what phase/step we're on
 - **Next step** — what to do next
 - Add any new conventions or patterns discovered this session
+
+Parity rules:
+- If both files exist, keep shared project context synchronized across both.
+- If one has richer shared context, propagate the shared parts to the other.
+- Platform-specific notes may differ, but shared execution context must match.
 
 ### TODO.md
 
@@ -117,6 +131,9 @@ Create or overwrite `HANDOFF.md` in project root.
 
 Use the standard template from [templates.md](templates.md). For emergency handoffs, use the emergency template.
 
+`/handoff` stays focused on one canonical file (`HANDOFF.md`).  
+Do not generate the multi-file fresh-agent bundle here; that is `/handoff-fresh`.
+
 ### Branching Instructions Pattern
 
 The "First Steps" section is critical — it tells the next session exactly what to read and in what order. The user only needs to say:
@@ -124,6 +141,14 @@ The "First Steps" section is critical — it tells the next session exactly what
 > "Read HANDOFF.md and continue"
 
 The handoff branches out to all relevant files, eliminating the need for the user to list them.
+
+### Bootstrap Read Rule (mandatory in generated HANDOFF.md)
+
+Generated `HANDOFF.md` must explicitly say:
+- If prompt says "read HANDOFF.md", treat it as bootstrap for First Steps.
+- Continue reading all files listed in First Steps before replying.
+- Do not send one-file interim acknowledgements.
+- First substantive reply must include a read receipt with one-line takeaway per First Steps file.
 
 ### Existing Handoff Detection
 
@@ -143,6 +168,8 @@ Before confirming, verify:
 - [ ] Every file in "Reference Files" table has a valid path
 - [ ] Commit hash matches actual last commit (if applicable)
 - [ ] No placeholder text left unfilled (no `{...}` remaining)
+- [ ] If both CLAUDE.md and AGENTS.md exist, shared project context is not contradictory
+- [ ] HANDOFF.md includes bootstrap read rule and no-interim-summary first-response contract
 
 Then output the confirmation using the template from [templates.md](templates.md).
 
@@ -190,8 +217,9 @@ git commit -m "WIP: JWT auth middleware with refresh token rotation"
 
 ## First Steps (Read in Order)
 1. Read CLAUDE.md — project context, auth architecture decisions
-2. Read TODO.md — 2 of 4 auth tasks complete
-3. Read src/middleware/auth.ts — JWT validation + refresh token rotation
+2. Read AGENTS.md — agent operating constraints + command policy
+3. Read TODO.md — 2 of 4 auth tasks complete
+4. Read src/middleware/auth.ts — JWT validation + refresh token rotation
 
 ## Session Summary
 
@@ -266,8 +294,11 @@ Update this skill when:
 
 **Applied Learnings:**
 
+- v2.4.0: Added mandatory bootstrap read rule in HANDOFF.md so "read handoff.md" prompts automatically trigger full First Steps reading before reply.
+- v2.2.0: Added explicit manual command contract for `/handoff`; clarified separation of responsibilities between `/handoff` (standard continuity) and `/handoff-fresh` (fork-safe fresh onboarding bundle).
+- v2.3.0: Added AGENTS.md-aware behavior for prerequisite checks, instruction-doc parity updates, and HANDOFF validation so Codex/Claude continuity remains aligned.
 - v2.1.0: Added Failed Approaches section to template (prevents next session repeating dead ends). Added Quick Mode for lightweight handoffs. Research-backed by cross-referencing Amp, Mother CLAUDE, and willseltzer/claude-handoff approaches.
 - v2.0.0: Renamed from handing-off. Fixed frontmatter. Added edge case handling, pitfalls table, git ops table, validation step, concrete example. Extracted templates to templates.md.
 - v1.0.0: Initial version based on forging-plans handoff pattern and external best practices
 
-Current version: 2.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 2.4.0. See [CHANGELOG.md](CHANGELOG.md) for history.

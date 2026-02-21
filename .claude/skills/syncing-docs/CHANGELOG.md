@@ -1,5 +1,44 @@
 # Changelog
 
+## [2.6.0] - 2026-02-21
+
+### Added
+- AGENTS.md as an owned doc target for drift fixing and session-learning sync
+- CLAUDE.md/AGENTS.md shared-context contradiction checks in cross-file consistency step
+
+### Changed
+- Change-to-doc mapping now updates both CLAUDE.md and AGENTS.md for shared project command/context drift
+
+## [2.5.0] - 2026-02-21
+
+### Added
+- Watched-file checks for handoff-fresh continuity artifacts: `.handoff-fresh/current/session-log-digest.md` and `.handoff-fresh/current/session-log-chunk.md`
+
+## [2.4.0] - 2026-02-21
+
+### Added
+- Cross-file contradiction detection for `.handoff-fresh/current/claude.md` vs `.handoff-fresh/current/agents.md` shared-context parity drift
+
+## [2.3.0] - 2026-02-21
+
+### Added
+- Added `.handoff-fresh/current/read-receipt.md` to watched-file checks for handoff-fresh bundle consistency
+
+## [2.2.0] - 2026-02-21
+
+### Changed
+- Updated handoff-fresh bundle integration to foldered layout at `.handoff-fresh/current/`
+- Updated watched-file validation and staleness checks to use foldered bundle paths
+- Updated summary output examples to report bundle directory path
+
+## [2.1.0] - 2026-02-21
+
+### Added
+- Explicit `/sync-docs` trigger in command contract language
+- `--refresh-fresh-bundle` flag to regenerate handoff-fresh onboarding bundle after sync via `/handoff-fresh --no-sync`
+- Watched-file checks for handoff-fresh bundle outputs: `claude.md`, `agents.md`, `todo.md`, `handoff.md`, `context.md`, `reports.md`, `artifacts.md`, `state.md`, `prior-plans.md`, `handoff-everything.md`
+- Staleness alert for fresh bundle artifacts when source docs/state are newer
+
 ## [2.0.0] - 2026-02-07
 
 ### Added

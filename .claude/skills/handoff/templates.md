@@ -12,10 +12,21 @@ Session summary for context continuity after clearing.
 ## First Steps (Read in Order)
 
 1. Read CLAUDE.md — project context, conventions, current phase
-2. Read TODO.md — task status, blockers, what's next
-3. {Additional files specific to current task}
+2. Read AGENTS.md — agent operating policy and command behavior
+3. Read TODO.md — task status, blockers, what's next
+4. {Additional files specific to current task}
 
 After reading these files, you'll have full context to continue.
+
+## Bootstrap Read Rule (Mandatory)
+
+If the user prompt only says "read HANDOFF.md", treat that as a bootstrap command for this list.
+
+- Continue by reading every file in **First Steps** before replying.
+- Do not send interim "done/read handoff" summaries.
+- First substantive reply must include a read receipt:
+  - `- [x] <file> — <1-line takeaway>`
+  - one line per First Steps file
 
 ## Session Summary
 
@@ -80,8 +91,9 @@ Session interrupted mid-{task}. Resume from {exact point}.
 ## First Steps (Read in Order)
 
 1. Read CLAUDE.md
-2. Read TODO.md
-3. {File being actively edited}
+2. Read AGENTS.md
+3. Read TODO.md
+4. {File being actively edited}
 
 ## State at Interruption
 - Working on: {task description}
@@ -101,7 +113,8 @@ Lightweight version for small tasks (bug fix, config change, single-file edit):
 
 ## First Steps (Read in Order)
 1. Read CLAUDE.md
-2. {Primary file being worked on}
+2. Read AGENTS.md
+3. {Primary file being worked on}
 
 ## What Was Done
 {1-3 bullet points}
@@ -114,4 +127,7 @@ Lightweight version for small tasks (bug fix, config change, single-file edit):
 
 ## Last Commit
 {hash} — {message}
+
+## Bootstrap Read Rule
+If prompt says "read HANDOFF.md", read all First Steps files before replying; no interim one-file summary.
 ```

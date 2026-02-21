@@ -19,14 +19,25 @@ These four form a lifecycle: create a skill, update it as you iterate, audit it 
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [handoff](.claude/skills/handoff/) | 2.1.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off |
-| [syncing-docs](.claude/skills/syncing-docs/) | 2.0.0 | Detects drift between code and project state files, fixes owned docs |
+| [handoff](.claude/skills/handoff/) | 2.4.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off |
+| [handoff-fresh](.claude/skills/handoff-fresh/) | 1.8.0 | Builds a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repos |
+| [syncing-docs](.claude/skills/syncing-docs/) | 2.6.0 | Detects drift between code and project state files, fixes owned docs (CLAUDE.md + AGENTS.md) |
 | [managing-doc-manifest](.claude/skills/managing-doc-manifest/) | 1.0.0 | Creates `.doc-manifest.yaml` — a registry of docs and their code references |
-| [wrap](.claude/skills/wrap/) | 1.0.0 | End-of-session coordinator: sync docs, audit CLAUDE.md, then handoff |
+| [wrap](.claude/skills/wrap/) | 1.3.0 | End-of-session coordinator: sync docs, run instruction-doc quality pass (CLAUDE.md + AGENTS.md), then handoff (optional fresh bundle) |
 
-During work, `syncing-docs` keeps documentation in sync with code changes. At the end of a session, `wrap` chains sync-docs → [claude-md-improver](https://github.com/anthropics/skills) (Anthropic plugin) → handoff. The result is a HANDOFF.md snapshot so a new session can resume with "Read HANDOFF.md and continue."
+During work, `syncing-docs` keeps documentation in sync with code changes. At the end of a session, `wrap` chains sync-docs → [claude-md-improver](https://github.com/anthropics/skills) (Anthropic plugin) → handoff. For forked/new-folder continuation by a brand-new agent, run `handoff-fresh` to generate a full onboarding bundle.
 
-Claude Code sessions are ephemeral, but project context shouldn't be. These skills maintain CLAUDE.md, TODO.md, HANDOFF.md, and `.doc-manifest.yaml` as persistent state files that survive `/clear` and crashes.
+Claude Code sessions are ephemeral, but project context shouldn't be. These skills maintain CLAUDE.md, AGENTS.md, TODO.md, HANDOFF.md, and `.doc-manifest.yaml` as persistent state files that survive `/clear` and crashes.
+
+## Explicit Commands and Hook Model
+
+- Canonical command entry points:
+  - `/sync-docs`
+  - `/handoff`
+  - `/handoff-fresh`
+  - `/wrap`
+- These flows are manual by default. No implicit side-channel behavior is required.
+- Hook guidance and archive-first cleanup policy for deprecated auto-handoff hooks: see [HOOKS.md](HOOKS.md).
 
 ### Research
 
@@ -75,7 +86,7 @@ Ask (single select):
 [ ] Install skills I don't have yet
 [ ] Both
 ```
-Show a version diff before proceeding, e.g.: "`handoff` 2.0.0 → 2.1.0 · `syncing-docs` up to date · `testing-skills` new"
+Show a version diff before proceeding, e.g.: "`handoff` 2.3.0 → 2.4.0 · `syncing-docs` 2.5.0 → 2.6.0 · `handoff-fresh` 1.7.0 → 1.8.0"
 
 **Step 4 — Detail level**
 
@@ -108,12 +119,15 @@ Ask (single select):
 
 Before installing, auto-resolve dependencies:
 - `wrap` requires `handoff`, `syncing-docs`, `managing-doc-manifest` — add any missing ones and tell the user
+- `wrap --with-fresh` additionally requires `handoff-fresh`
 - `updating-skills` works best with `auditing-skills` and `testing-skills` — add if missing and tell the user
 - If a skill dir already exists but is not from this repo, warn before overwriting
 
 **Step 8 — Install**
 
-Copy each selected skill directory to the chosen location. For each skill being overwritten, show the version change (e.g. `handoff` 2.0.0 → 2.1.0).
+Copy each selected skill directory to the chosen location. For each skill being overwritten, show the version change (e.g. `handoff` 2.3.0 → 2.4.0).
+
+Also copy matching command entry files from `.claude/commands/` when present (for example `handoff.md`, `handoff-fresh.md`, `wrap.md`) so slash-command paths stay explicit.
 
 **Step 9 — Post-install summary**
 
@@ -126,14 +140,18 @@ List every installed skill with its slash command (e.g. `/handoff`, `/study`). F
 ```bash
 # Clone into your project — skills are auto-discovered
 git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
+mkdir -p your-project/.claude/skills your-project/.claude/commands
 cp -r /tmp/claude-skills/.claude/skills/* your-project/.claude/skills/
+cp -r /tmp/claude-skills/.claude/commands/* your-project/.claude/commands/
 ```
 
 ### Option 2: Install globally (all projects)
 
 ```bash
 git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
+mkdir -p ~/.claude/skills ~/.claude/commands
 cp -r /tmp/claude-skills/.claude/skills/* ~/.claude/skills/
+cp -r /tmp/claude-skills/.claude/commands/* ~/.claude/commands/
 ```
 
 ### Option 3: Use as additional directory
@@ -152,6 +170,7 @@ claude --add-dir ~/claude-skills
 wrap ──→ syncing-docs ──→ managing-doc-manifest
   │
   └──→ handoff
+  └──→ handoff-fresh (optional via --with-fresh)
 
 updating-skills ──→ creating-skills (spec rules)
                 └──→ auditing-skills (validation checklist)
@@ -162,7 +181,7 @@ testing-skills ──→ creating-skills (EVALUATIONS.md format)
 study (standalone)
 ```
 
-`wrap` chains three skills sequentially. If a dependency isn't installed, that step can be skipped — but the full workflow works best with all session management skills present.
+`wrap` chains three skills sequentially by default, with an optional fourth step (`--with-fresh`) for `handoff-fresh`. If a dependency isn't installed, that step can be skipped — but the full workflow works best with all session management skills present.
 
 ### External dependencies
 
@@ -173,12 +192,13 @@ study (standalone)
 ### Optional integrations
 
 - `syncing-docs` checks for an `architect/` directory (created by [forging-plans](https://github.com/gradigit/forging-workflow)). If it doesn't exist, this is silently skipped.
-- `handoff` references CLAUDE.md, TODO.md, and `architect/` files if present. None are required.
+- `handoff` references CLAUDE.md, AGENTS.md, TODO.md, and `architect/` files if present. None are required.
+- `handoff-fresh` emits a fresh-agent bundle at `.handoff-fresh/current/` by default: `claude.md`, `agents.md`, `todo.md`, `handoff.md`, `context.md`, `reports.md`, `artifacts.md`, `state.md`, `prior-plans.md`, `read-receipt.md`, `session-log-digest.md`, `session-log-chunk.md`, `handoff-everything.md`. It also updates root `HANDOFF.md` as a bridge pointer to bundle handoff, supports an agent-internal `--validate-read-gate` preflight check before coding, enforces shared-context parity between bundle `claude.md` and `agents.md`, and keeps log continuity token-budgeted.
 
 ## Customization
 
 These skills are workflow opinions. They assume:
-- Projects should have a CLAUDE.md for persistent context
+- Projects should have CLAUDE.md and AGENTS.md for persistent cross-agent context
 - Sessions should end with a handoff for continuity
 - Documentation should be tracked with `.doc-manifest.yaml`
 - Skills should follow the [Agent Skills spec](https://agentskills.io)

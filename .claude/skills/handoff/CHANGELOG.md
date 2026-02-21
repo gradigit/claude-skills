@@ -5,6 +5,33 @@ All notable changes to this skill will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-02-21
+
+### Added
+- Mandatory HANDOFF bootstrap-read rule so "read HANDOFF.md" prompts auto-expand to full First Steps reading
+- First-response contract in templates: no interim one-file summary; require per-file read receipt
+
+### Changed
+- Validation checklist now enforces presence of bootstrap-read rule in generated HANDOFF.md
+
+## [2.3.0] - 2026-02-21
+
+### Added
+- AGENTS.md-aware prerequisite handling (create/minimize parity gaps when missing)
+- Validation check for CLAUDE.md/AGENTS.md shared-context contradictions
+
+### Changed
+- HANDOFF first-step guidance now includes AGENTS.md alongside CLAUDE.md for cross-agent continuity
+
+## [2.2.0] - 2026-02-21
+
+### Added
+- Explicit manual command contract centered on `/handoff` (no implicit/side-channel invocation)
+- Clear routing rule: use `/handoff-fresh` for fork-safe, brand-new-agent onboarding bundles
+
+### Changed
+- Clarified `/handoff` scope as canonical single-file continuity (`HANDOFF.md`) while fresh multi-file bundles live in `handoff-fresh`
+
 ## [2.1.0] - 2026-02-07
 
 ### Added
