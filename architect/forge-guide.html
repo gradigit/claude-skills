@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge Skills Suite — Workflow Guide</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --bg2: #161b22;
+    --bg3: #21262d;
+    --border: #30363d;
+    --text: #c9d1d9;
+    --text-dim: #8b949e;
+    --accent: #58a6ff;
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --purple: #bc8cff;
+    --pink: #f778ba;
+    --cyan: #39d2c0;
+    --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  code { font-family: var(--mono); background: var(--bg3); padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+
+  /* Layout */
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+  section { padding: 64px 0; border-bottom: 1px solid var(--border); }
+  h1, h2, h3 { font-family: var(--mono); font-weight: 600; }
+  h2 { font-size: 1.6em; margin-bottom: 24px; color: var(--accent); }
+  h3 { font-size: 1.15em; margin-bottom: 12px; color: var(--text); }
+  p { margin-bottom: 16px; }
+  .dim { color: var(--text-dim); }
+
+  /* Hero */
+  .hero { text-align: center; padding: 80px 0 48px; border-bottom: 1px solid var(--border); }
+  .hero h1 { font-size: 2.8em; margin-bottom: 8px; background: linear-gradient(135deg, var(--accent), var(--purple)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .hero p { font-size: 1.15em; color: var(--text-dim); margin-bottom: 32px; }
+
+  /* Nav pills */
+  .nav-pills { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .nav-pill { display: inline-block; padding: 8px 20px; border: 1px solid var(--border); border-radius: 20px; font-family: var(--mono); font-size: 0.85em; transition: all 0.2s; }
+  .nav-pill:hover { border-color: var(--accent); background: rgba(88,166,255,0.1); text-decoration: none; }
+
+  /* Entry point cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; transition: border-color 0.2s; }
+  .card:hover { border-color: var(--accent); }
+  .card-cmd { font-family: var(--mono); font-size: 1.1em; margin-bottom: 8px; }
+  .card-desc { color: var(--text-dim); font-size: 0.95em; margin-bottom: 12px; }
+  .card-when { font-size: 0.85em; padding: 8px 12px; background: var(--bg3); border-radius: 6px; }
+  .card-when strong { color: var(--green); }
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75em; font-family: var(--mono); margin-right: 4px; }
+  .tag-l0 { background: rgba(57,210,192,0.15); color: var(--cyan); border: 1px solid rgba(57,210,192,0.3); }
+  .tag-l1 { background: rgba(247,120,186,0.15); color: var(--pink); border: 1px solid rgba(247,120,186,0.3); }
+  .tag-l2 { background: rgba(88,166,255,0.15); color: var(--accent); border: 1px solid rgba(88,166,255,0.3); }
+  .tag-agent { background: rgba(188,140,255,0.15); color: var(--purple); border: 1px solid rgba(188,140,255,0.3); }
+
+  /* Architecture */
+  .arch { display: flex; flex-direction: column; gap: 2px; }
+  .arch-layer { display: flex; align-items: stretch; gap: 2px; min-height: 64px; }
+  .arch-label { width: 100px; display: flex; align-items: center; justify-content: center; font-family: var(--mono); font-size: 0.8em; color: var(--text-dim); flex-shrink: 0; }
+  .arch-box { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; border-radius: 8px; font-family: var(--mono); font-size: 0.9em; text-align: center; line-height: 1.4; }
+  .arch-l2 { background: rgba(88,166,255,0.12); border: 1px solid rgba(88,166,255,0.3); color: var(--accent); }
+  .arch-l1 { background: rgba(247,120,186,0.12); border: 1px solid rgba(247,120,186,0.3); color: var(--pink); }
+  .arch-l0 { background: rgba(57,210,192,0.12); border: 1px solid rgba(57,210,192,0.3); color: var(--cyan); }
+  .arch-ag { background: rgba(188,140,255,0.12); border: 1px solid rgba(188,140,255,0.3); color: var(--purple); }
+  .arch-arrows { padding: 8px 0 8px 100px; color: var(--text-dim); font-family: var(--mono); font-size: 0.8em; display: flex; gap: 24px; flex-wrap: wrap; }
+  .arch-arrows span { white-space: nowrap; }
+
+  /* Pipeline */
+  .pipeline { display: flex; align-items: center; gap: 0; overflow-x: auto; padding: 16px 0; }
+  .phase { display: flex; flex-direction: column; align-items: center; min-width: 100px; position: relative; }
+  .phase-dot { width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-family: var(--mono); font-weight: 700; border: 2px solid; position: relative; z-index: 1; }
+  .phase-label { font-family: var(--mono); font-size: 0.7em; margin-top: 8px; text-align: center; max-width: 90px; }
+  .phase-arrow { width: 32px; height: 2px; background: var(--border); flex-shrink: 0; margin-top: -20px; }
+  .phase-dot.intake { background: rgba(88,166,255,0.2); border-color: var(--accent); color: var(--accent); }
+  .phase-dot.research { background: rgba(57,210,192,0.2); border-color: var(--cyan); color: var(--cyan); }
+  .phase-dot.planning { background: rgba(210,153,34,0.2); border-color: var(--orange); color: var(--orange); }
+  .phase-dot.build { background: rgba(63,185,80,0.2); border-color: var(--green); color: var(--green); }
+  .phase-dot.review { background: rgba(248,81,73,0.2); border-color: var(--red); color: var(--red); }
+  .phase-dot.improve { background: rgba(247,120,186,0.2); border-color: var(--pink); color: var(--pink); }
+  .phase-dot.gate { background: rgba(188,140,255,0.2); border-color: var(--purple); color: var(--purple); }
+  .phase-dot.compound { background: rgba(88,166,255,0.2); border-color: var(--accent); color: var(--accent); }
+  .phase-dot.final { background: rgba(63,185,80,0.2); border-color: var(--green); color: var(--green); }
+
+  .loop-bracket { border: 2px dashed var(--border); border-radius: 12px; padding: 20px 12px 12px; margin: 20px 0; position: relative; }
+  .loop-label { position: absolute; top: -12px; left: 20px; background: var(--bg); padding: 0 8px; font-family: var(--mono); font-size: 0.8em; color: var(--text-dim); }
+
+  /* Details / Expandable */
+  details { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 12px; }
+  details[open] { border-color: var(--accent); }
+  summary { padding: 14px 18px; cursor: pointer; font-family: var(--mono); font-size: 0.95em; list-style: none; display: flex; align-items: center; gap: 10px; }
+  summary::-webkit-details-marker { display: none; }
+  summary::before { content: '\25B6'; font-size: 0.7em; transition: transform 0.2s; color: var(--text-dim); }
+  details[open] summary::before { transform: rotate(90deg); }
+  .detail-body { padding: 0 18px 18px; }
+  .detail-body p { font-size: 0.9em; }
+
+  /* Tables */
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9em; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-family: var(--mono); color: var(--text-dim); font-weight: 500; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.5px; }
+  td code { font-size: 0.85em; }
+
+  /* Flow diagrams (vertical) */
+  .flow { display: flex; flex-direction: column; align-items: center; gap: 0; padding: 20px 0; }
+  .flow-step { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 12px 24px; font-family: var(--mono); font-size: 0.85em; text-align: center; min-width: 280px; position: relative; }
+  .flow-arrow-down { width: 2px; height: 24px; background: var(--border); position: relative; }
+  .flow-arrow-down::after { content: '\25BC'; position: absolute; bottom: -6px; left: -5px; font-size: 0.7em; color: var(--border); }
+  .flow-branch { display: flex; gap: 16px; align-items: flex-start; }
+  .flow-branch .flow { flex: 1; }
+  .flow-loop { border: 2px dashed var(--border); border-radius: 12px; padding: 20px 16px 16px; position: relative; }
+  .flow-loop-label { position: absolute; top: -12px; left: 16px; background: var(--bg); padding: 0 8px; font-family: var(--mono); font-size: 0.75em; color: var(--text-dim); }
+
+  /* State file grid */
+  .state-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+  .state-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+  .state-card h4 { font-family: var(--mono); font-size: 0.85em; margin-bottom: 6px; }
+  .state-card p { font-size: 0.8em; color: var(--text-dim); margin: 0; }
+  .state-card .dir { font-size: 0.75em; color: var(--orange); }
+  .state-card .dir.human { color: var(--green); }
+  .state-card .dir.bi { color: var(--purple); }
+
+  /* Platform comparison */
+  .platform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 700px) { .platform-grid { grid-template-columns: 1fr; } }
+  .platform-col { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; }
+  .platform-col h3 { margin-bottom: 16px; }
+
+  /* Agent cards */
+  .agent-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+  .agent-card { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+  .agent-card h4 { font-family: var(--mono); font-size: 0.9em; color: var(--purple); margin-bottom: 4px; }
+  .agent-card .sandbox { font-size: 0.75em; font-family: var(--mono); padding: 2px 8px; border-radius: 4px; display: inline-block; margin-bottom: 8px; }
+  .sandbox.ro { background: rgba(57,210,192,0.15); color: var(--cyan); }
+  .sandbox.rw { background: rgba(63,185,80,0.15); color: var(--green); }
+  .agent-card p { font-size: 0.85em; color: var(--text-dim); margin-bottom: 8px; }
+  .agent-card .constraint { font-size: 0.8em; color: var(--orange); }
+
+  /* Footer */
+  footer { padding: 32px 0; text-align: center; color: var(--text-dim); font-size: 0.85em; }
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<header class="hero container">
+  <h1>Forge Skills Suite</h1>
+  <p>Autonomous multi-agent workflows for Claude Code &amp; Codex CLI</p>
+  <nav class="nav-pills">
+    <a href="#entry" class="nav-pill">Entry Points</a>
+    <a href="#arch" class="nav-pill">Architecture</a>
+    <a href="#orchestrator" class="nav-pill">/forge Pipeline</a>
+    <a href="#research" class="nav-pill">/forge-research</a>
+    <a href="#builder" class="nav-pill">/forge-builder</a>
+    <a href="#state" class="nav-pill">State Files</a>
+    <a href="#platforms" class="nav-pill">Platforms</a>
+    <a href="#agents" class="nav-pill">Agents</a>
+  </nav>
+</header>
+
+<!-- Section 1: Entry Points -->
+<section id="entry">
+  <div class="container">
+    <h2>Three Entry Points</h2>
+    <p class="dim">Choose based on task complexity. Each can be used standalone or the orchestrator invokes the others.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-cmd" style="color:var(--accent)">/forge <span class="dim">[goal]</span></div>
+        <div class="card-desc">Full orchestrator pipeline. Parses goal into milestones, runs research &rarr; build &rarr; review cycles, maintains state files for compaction survival.</div>
+        <div class="card-when"><strong>Use when:</strong> Multi-step project, 2+ milestones, needs coordination between research and building</div>
+      </div>
+      <div class="card">
+        <div class="card-cmd" style="color:var(--cyan)">/forge-research <span class="dim">[topic]</span></div>
+        <div class="card-desc">Autonomous research campaign. Multi-agent breadth &rarr; depth with hypothesis tracking, adversarial challenge, and source verification.</div>
+        <div class="card-when"><strong>Use when:</strong> Deep technical research, comparing approaches, evaluating libraries &mdash; not building yet</div>
+      </div>
+      <div class="card">
+        <div class="card-cmd" style="color:var(--green)">/forge-builder <span class="dim">[task]</span></div>
+        <div class="card-desc">Autonomous build with self-review, self-improvement, and quality gates. Classifies input as directive (build) or inquiry (analyze only).</div>
+        <div class="card-when"><strong>Use when:</strong> Single feature or fix with clear scope. No research phase needed.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 2: Architecture -->
+<section id="arch">
+  <div class="container">
+    <h2>Layered Architecture</h2>
+    <p class="dim">Skills are layered. Upper layers invoke lower layers. Layer 0 provides platform-specific patterns.</p>
+    <div class="arch">
+      <div class="arch-layer">
+        <div class="arch-label"><span class="tag tag-l2">Layer 2</span></div>
+        <div class="arch-box arch-l2" style="flex:1">forge-orchestrator<br><span style="font-size:0.8em;opacity:0.7">Sequences milestones, invokes Layer 1, spawns agents</span></div>
+      </div>
+      <div class="arch-arrows">
+        <span>INVOKES &darr;</span>
+        <span>SPAWNS &darr;</span>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label"><span class="tag tag-l1">Layer 1</span></div>
+        <div class="arch-box arch-l1" style="flex:1">forge-research<br><span style="font-size:0.8em;opacity:0.7">Multi-agent research campaigns</span></div>
+        <div class="arch-box arch-l1" style="flex:1">forge-builder<br><span style="font-size:0.8em;opacity:0.7">Build with self-review loops</span></div>
+      </div>
+      <div class="arch-arrows">
+        <span>READS &darr;</span>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label"><span class="tag tag-l0">Layer 0</span></div>
+        <div class="arch-box arch-l0" style="flex:1">forge-claude-teams<br><span style="font-size:0.8em;opacity:0.7">Claude Code: Agent, TeamCreate, SendMessage</span></div>
+        <div class="arch-box arch-l0" style="flex:1">forge-codex-multiagent<br><span style="font-size:0.8em;opacity:0.7">Codex CLI: spawn_agent, fork_context, CSV batch</span></div>
+      </div>
+      <div class="arch-arrows">
+        <span>&nbsp;</span>
+      </div>
+      <div class="arch-layer">
+        <div class="arch-label"><span class="tag tag-agent">Agents</span></div>
+        <div class="arch-box arch-ag" style="flex:1">adversarial-reviewer</div>
+        <div class="arch-box arch-ag" style="flex:1">build-worker</div>
+        <div class="arch-box arch-ag" style="flex:1">research-worker</div>
+        <div class="arch-box arch-ag" style="flex:1">performance-auditor</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 3: Orchestrator Pipeline -->
+<section id="orchestrator">
+  <div class="container">
+    <h2>/forge &mdash; Full Orchestrator Pipeline</h2>
+    <p class="dim">The master workflow. Runs once per goal, iterating over milestones.</p>
+
+    <!-- Visual pipeline -->
+    <div class="pipeline">
+      <div class="phase"><div class="phase-dot intake">1</div><div class="phase-label">Intake</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot research">R</div><div class="phase-label">Research</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot planning">P</div><div class="phase-label">Planning</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot build">B</div><div class="phase-label">Build</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot review">V</div><div class="phase-label">Review</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot review">2</div><div class="phase-label">2nd Opinion</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot improve">I</div><div class="phase-label">Improve</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot gate">G</div><div class="phase-label">Gate</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot compound">C</div><div class="phase-label">Compound</div></div>
+      <div class="phase-arrow"></div>
+      <div class="phase"><div class="phase-dot final">&check;</div><div class="phase-label">Finalize</div></div>
+    </div>
+    <p style="text-align:center;margin-top:-8px" class="dim"><code>R &rarr; P &rarr; B &rarr; V &rarr; 2 &rarr; I &rarr; G &rarr; C</code> repeats for each milestone</p>
+
+    <!-- Phase details -->
+    <div style="margin-top: 24px">
+      <details>
+        <summary>Step 1: Intake &amp; Orientation</summary>
+        <div class="detail-body">
+          <table>
+            <tr><th>Action</th><th>Detail</th></tr>
+            <tr><td>Check for resume</td><td>Read FORGE-HANDOFF.md if exists (compaction recovery)</td></tr>
+            <tr><td>Platform detect</td><td>Claude Code &rarr; read forge-claude-teams | Codex &rarr; read forge-codex-multiagent</td></tr>
+            <tr><td>Create state files</td><td>FORGE-STATUS.md, FORGE-HANDOFF.md, FORGE-MEMORY.md, HUMAN-INPUT.md, MISSION-CONTROL.md</td></tr>
+            <tr><td>Parse goal</td><td>Structure into milestones with per-step success criteria</td></tr>
+            <tr><td>Git-ignore</td><td>Add forge artifacts to <code>.git/info/exclude</code></td></tr>
+            <tr><td>CLAUDE.md</td><td>Add Compact Instructions + Forge Pipeline State sections</td></tr>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--cyan)">R</span> &nbsp;Research Phase</summary>
+        <div class="detail-body">
+          <p>Invokes <code>forge-research</code> for unknowns in the current milestone. Research runs to completion before building starts. Skipped if the milestone has no unknowns.</p>
+          <p><strong>Spawns:</strong> <span class="tag tag-agent">research-worker</span> agents (web + codebase)</p>
+          <p><strong>Output:</strong> <code>architect/research/{topic}.md</code></p>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--orange)">P</span> &nbsp;Planning Phase (complexity-adaptive)</summary>
+        <div class="detail-body">
+          <table>
+            <tr><th>Complexity</th><th>Approach</th></tr>
+            <tr><td>Simple (single file, clear spec)</td><td>Skip detailed planning, inline notes</td></tr>
+            <tr><td>Standard</td><td>Concise approach with key decisions</td></tr>
+            <tr><td>Complex (multi-file, unknowns)</td><td>Detailed plan with &ge;2 approaches + trade-offs</td></tr>
+          </table>
+          <p><strong>Spawns:</strong> <span class="tag tag-agent">adversarial-reviewer</span> to critique the plan (max 3 iterations until no CRITICAL/HIGH)</p>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--green)">B</span> &nbsp;Build Phase</summary>
+        <div class="detail-body">
+          <p>Invokes <code>forge-builder</code> with the refined plan. Builder executes with self-review and self-improvement loops. Waits for completion signal.</p>
+          <p><strong>Spawns:</strong> <span class="tag tag-agent">build-worker</span> in worktree isolation (Claude Code) or with scoped ownership (Codex)</p>
+          <p><strong>State:</strong> TODO.md updated per phase, git checkpoint on gate pass</p>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--red)">V</span> &nbsp;Review Phase (fresh context, parallel)</summary>
+        <div class="detail-body">
+          <p><strong>Critical:</strong> All reviewers run in FRESH context. They get only: milestone spec + git diff + test results. No builder conversation history. This avoids confirmation bias (40-60% quality improvement per ASDLC research).</p>
+          <table>
+            <tr><th>Batch</th><th>Agents</th><th>Focus</th></tr>
+            <tr><td>Batch 1 (up to 3 parallel)</td><td><span class="tag tag-agent">adversarial-reviewer</span> + <span class="tag tag-agent">performance-auditor</span></td><td>Bugs, security, logic, performance, test coverage</td></tr>
+            <tr><td>Batch 2 (after batch 1)</td><td>Documentation + Brainstorm agents</td><td>Docs for changes, improvement ideas</td></tr>
+          </table>
+          <p><strong>Output:</strong> <code>architect/review-findings/{milestone}.md</code></p>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--red)">2</span> &nbsp;Second-Opinion Phase (optional)</summary>
+        <div class="detail-body">
+          <p>Try other CLIs if available (Codex, Gemini). Send git diff + intent. Common case: all unavailable &rarr; skip entirely, note in summary.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--pink)">I</span> &nbsp;Improvement Phase</summary>
+        <div class="detail-body">
+          <p>Consolidates all review findings. Classifies each:</p>
+          <table>
+            <tr><th>Type</th><th>Action</th></tr>
+            <tr><td>Bug fix</td><td>Apply immediately</td></tr>
+            <tr><td>Improvement (existing)</td><td>Apply</td></tr>
+            <tr><td>New feature</td><td>Write to SUGGESTIONS.md, do NOT implement</td></tr>
+          </table>
+          <p>Re-runs quality gates after improvements applied.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--purple)">G</span> &nbsp;Quality Gate</summary>
+        <div class="detail-body">
+          <p>ALL must pass: tests green, critical findings addressed, no regressions, diminishing returns check.</p>
+          <table>
+            <tr><th>Outcome</th><th>Action</th></tr>
+            <tr><td>Pass</td><td>Proceed to COMPOUND</td></tr>
+            <tr><td>Fail</td><td>Loop back to BUILD (max 2 retries per milestone)</td></tr>
+            <tr><td>Fail after 2 retries</td><td>Escalate to user with details</td></tr>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--accent)">C</span> &nbsp;Compound Step</summary>
+        <div class="detail-body">
+          <p>After gate passes, codify learnings for future milestones:</p>
+          <ol style="padding-left:20px;font-size:0.9em;margin-top:8px">
+            <li>Update CLAUDE.md with conventions discovered this milestone</li>
+            <li>Consolidate SUGGESTIONS.md (deduplicate, sort by confidence)</li>
+            <li>Check SUGGESTIONS.md for human feedback (approved &rarr; new milestones)</li>
+            <li>Update TODO.md with deferred items</li>
+            <li>Update FORGE-MEMORY.md with learnings</li>
+            <li>Update FORGE-STATUS.md + FORGE-HANDOFF.md</li>
+            <li>Check HUMAN-INPUT.md + MISSION-CONTROL.md for directives</li>
+            <li>Git commit milestone output</li>
+          </ol>
+        </div>
+      </details>
+
+      <details>
+        <summary><span style="color:var(--green)">&check;</span> &nbsp;Finalization</summary>
+        <div class="detail-body">
+          <p>Runs after all milestones complete: full test suite, update CLAUDE.md, consolidate SUGGESTIONS.md, generate summary, cleanup temporary artifacts (agent-contexts/, review-findings/, DEFERRED-CHANGES.md).</p>
+        </div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- Section 4: Research Pipeline -->
+<section id="research">
+  <div class="container">
+    <h2>/forge-research &mdash; Standalone Research</h2>
+    <p class="dim">9-step research campaign with hypothesis tracking and adversarial challenge.</p>
+    <div class="flow">
+      <div class="flow-step" style="border-color:var(--cyan)">1. Parse research directive<br><span class="dim" style="font-size:0.85em">Extract topic, questions, scope, constraints, output path</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--cyan)">2. Platform detection<br><span class="dim" style="font-size:0.85em">Read forge-claude-teams or forge-codex-multiagent</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--orange)">3. Formulate hypotheses + Questions to Resolve<br><span class="dim" style="font-size:0.85em">Termination criteria: all questions must be checked off</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-loop">
+        <div class="flow-loop-label">iterates until diminishing returns or 3 depth cycles</div>
+        <div class="flow">
+          <div class="flow-step" style="border-color:var(--green)">4. Phase 1: Breadth agents<br><span class="dim" style="font-size:0.85em">Web research (study skill) + codebase exploration<br>Parallel for independent queries, sequential for dependent</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--accent)">5. Synthesize findings<br><span class="dim" style="font-size:0.85em">Findings table with confidence scores, update hypothesis status</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--red)">6. Adversarial challenge<br><span class="dim" style="font-size:0.85em">Self-critique (always) + <span class="tag tag-agent">adversarial-reviewer</span> (if available)<br>Check: confirmation bias, source quality, gaps, contradictions</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--purple)">7. Phase 2: Depth agents<br><span class="dim" style="font-size:0.85em">Targeted queries for gaps, cross-reference disputed claims</span></div>
+        </div>
+      </div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--accent)">8. Final synthesis<br><span class="dim" style="font-size:0.85em">Confidence scoring (high/medium/low), hypothesis resolution</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--green)">9. Write output<br><span class="dim" style="font-size:0.85em"><code>architect/research/{topic-slug}.md</code></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 5: Builder Pipeline -->
+<section id="builder">
+  <div class="container">
+    <h2>/forge-builder &mdash; Standalone Build</h2>
+    <p class="dim">Autonomous building with self-review, self-improvement, and quality gates.</p>
+    <div class="flow">
+      <div class="flow-step" style="border-color:var(--orange)">Classify input<br><span class="dim" style="font-size:0.85em"><strong>Directive</strong> (build it) &rarr; proceed | <strong>Inquiry</strong> (how should we?) &rarr; analyze only</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--cyan)">Platform detection<br><span class="dim" style="font-size:0.85em">Read Layer 0 practices guide once</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--accent)">Plan implementation<br><span class="dim" style="font-size:0.85em">Use existing plan (orchestrated) or auto-detect from architect/</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-loop">
+        <div class="flow-loop-label">repeats per phase (max 2 retries on gate fail)</div>
+        <div class="flow">
+          <div class="flow-step" style="border-color:var(--green)">a. Implement<br><span class="dim" style="font-size:0.85em">Write code. End-state description, not step-by-step.<br>Spawns <span class="tag tag-agent">build-worker</span> if available</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--red)">b. Self-Review<br><span class="dim" style="font-size:0.85em">Requirements check, logic errors, conventions, security<br>Or <span class="tag tag-agent">adversarial-reviewer</span> for critical builds</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--accent)">c. Run Tests<br><span class="dim" style="font-size:0.85em">If test infra exists. Skip if none (don't fabricate)</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--pink)">d. Self-Improvement Scan<br><span class="dim" style="font-size:0.85em">Performance, quality, error handling, test coverage</span></div>
+          <div class="flow-arrow-down"></div>
+          <div class="flow-step" style="border-color:var(--purple)">e. Quality Gate<br><span class="dim" style="font-size:0.85em">Tests pass + lint clean + no critical issues + reqs met + no regressions</span></div>
+        </div>
+      </div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--orange)">New feature detection<br><span class="dim" style="font-size:0.85em">Improvement &rarr; apply | New feature &rarr; SUGGESTIONS.md</span></div>
+      <div class="flow-arrow-down"></div>
+      <div class="flow-step" style="border-color:var(--green)">Final validation + summary<br><span class="dim" style="font-size:0.85em">Full test suite, TODO.md check, completion report</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 6: State Files -->
+<section id="state">
+  <div class="container">
+    <h2>State Files &amp; Human Steering</h2>
+    <p class="dim">Persistent files that survive compaction, enable resumption, and allow human steering during autonomous runs.</p>
+
+    <h3 style="margin-top:24px">Agent State Files</h3>
+    <div class="state-grid">
+      <div class="state-card">
+        <h4>FORGE-STATUS.md</h4>
+        <div class="dir">agent &rarr; disk</div>
+        <p>Current milestone, phase, active agents, completed/pending steps, blockers. Updated at every phase transition.</p>
+      </div>
+      <div class="state-card">
+        <h4>FORGE-HANDOFF.md</h4>
+        <div class="dir">agent &rarr; disk</div>
+        <p>Compaction survival checkpoint. "What was I doing RIGHT NOW?" Updated every 5 steps + at milestones. ~600 tokens.</p>
+      </div>
+      <div class="state-card">
+        <h4>FORGE-MEMORY.md</h4>
+        <div class="dir">agent &rarr; disk</div>
+        <p>Cross-milestone learnings. Minimum-signal gate: "Will a future agent act better knowing this?"</p>
+      </div>
+      <div class="state-card">
+        <h4>TODO.md</h4>
+        <div class="dir">agent &rarr; disk</div>
+        <p>Task checklist with completion status. Updated after every significant step.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:32px">Human Steering Channels</h3>
+    <div class="state-grid">
+      <div class="state-card">
+        <h4>SUGGESTIONS.md</h4>
+        <div class="dir bi">bidirectional</div>
+        <p>Agent writes suggestions with confidence scores. Human writes: approved / rejected / needs-revision. Checked every phase transition.</p>
+      </div>
+      <div class="state-card">
+        <h4>HUMAN-INPUT.md</h4>
+        <div class="dir human">human &rarr; agent</div>
+        <p>New work items, brainstorming ideas. Agent processes and moves to "Processed" section.</p>
+      </div>
+      <div class="state-card">
+        <h4>MISSION-CONTROL.md</h4>
+        <div class="dir human">human &rarr; agent</div>
+        <p>Steering directives: PRIORITY, STOP, NOTE, FOCUS, EXPAND. The "steering wheel" for long-running sessions.</p>
+      </div>
+    </div>
+
+    <h3 style="margin-top:32px">Compaction Survival</h3>
+    <details>
+      <summary>How the pipeline survives auto-compaction</summary>
+      <div class="detail-body">
+        <ol style="padding-left:20px;font-size:0.9em">
+          <li>CLAUDE.md is the anchor &mdash; survives compaction verbatim (re-read from disk)</li>
+          <li><code>## Forge Pipeline State</code> section instructs: re-read FORGE-HANDOFF.md, FORGE-STATUS.md, TODO.md, FORGE-MEMORY.md</li>
+          <li>Agent reads state files, recovers full session context</li>
+          <li>Resumes from the last completed phase transition</li>
+          <li>Increments <code>compaction_count</code> in FORGE-HANDOFF.md</li>
+          <li>At count 4-5: delegates more aggressively to sub-agents. At 5+: maximum delegation.</li>
+        </ol>
+      </div>
+    </details>
+  </div>
+</section>
+
+<!-- Section 7: Platforms -->
+<section id="platforms">
+  <div class="container">
+    <h2>Platform Support</h2>
+    <p class="dim">The same skills work on both platforms. Layer 0 provides platform-specific patterns.</p>
+    <div class="platform-grid">
+      <div class="platform-col">
+        <h3 style="color:var(--accent)">Claude Code</h3>
+        <table>
+          <tr><th>Feature</th><th>Tool</th></tr>
+          <tr><td>Spawn sub-agent</td><td><code>Agent</code> tool</td></tr>
+          <tr><td>Create team</td><td><code>TeamCreate</code></td></tr>
+          <tr><td>Message teammate</td><td><code>SendMessage</code></td></tr>
+          <tr><td>Worktree isolation</td><td><code>isolation: "worktree"</code></td></tr>
+          <tr><td>Custom agents</td><td><code>.claude/agents/*.md</code></td></tr>
+          <tr><td>Slash commands</td><td><code>.claude/commands/*.md</code></td></tr>
+        </table>
+        <p style="font-size:0.85em;margin-top:12px" class="dim">Guide: <code>forge-claude-teams/SKILL.md</code></p>
+      </div>
+      <div class="platform-col">
+        <h3 style="color:var(--cyan)">Codex CLI</h3>
+        <table>
+          <tr><th>Feature</th><th>Tool</th></tr>
+          <tr><td>Spawn sub-agent</td><td><code>spawn_agent()</code></td></tr>
+          <tr><td>Batch spawn</td><td><code>spawn_agents_on_csv()</code></td></tr>
+          <tr><td>Send follow-up</td><td><code>send_input()</code></td></tr>
+          <tr><td>Isolation</td><td>File ownership scoping (no worktree)</td></tr>
+          <tr><td>Custom agents</td><td><code>[agents.*]</code> in config.toml</td></tr>
+          <tr><td>Signals</td><td>HALT / SKIP / IDLE / DONE</td></tr>
+        </table>
+        <p style="font-size:0.85em;margin-top:12px" class="dim">Guide: <code>forge-codex-multiagent/SKILL.md</code></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Section 8: Custom Agents -->
+<section id="agents">
+  <div class="container">
+    <h2>Custom Agent Roles</h2>
+    <p class="dim">Four specialized agents with strict role boundaries. Read-only agents can't write; build workers can't exceed scope.</p>
+    <div class="agent-grid">
+      <div class="agent-card">
+        <h4>forge-adversarial-reviewer</h4>
+        <span class="sandbox ro">read-only</span>
+        <p>Critical reviewer for code, plans, and specs. Finds flaws, gaps, ambiguities, and security issues.</p>
+        <div class="constraint">Confidence gate: &ge;80% with file:line evidence</div>
+        <div class="constraint">Severity: S3C3=CRITICAL, S2C2=WARNING, S1C1=INFO</div>
+      </div>
+      <div class="agent-card">
+        <h4>forge-build-worker</h4>
+        <span class="sandbox rw">full-access</span>
+        <p>Implementation worker. Builds code within declared file scope, self-verifies against spec, runs tests after every change.</p>
+        <div class="constraint">Scope: MUST NOT modify files outside ownership</div>
+        <div class="constraint">Step limit: 60 tool calls max</div>
+      </div>
+      <div class="agent-card">
+        <h4>forge-research-worker</h4>
+        <span class="sandbox ro">read-only</span>
+        <p>Web research and codebase exploration. Source verification, hypothesis tracking. NO write access (Rule of Two).</p>
+        <div class="constraint">Every claim must cite a source (URL or file:line)</div>
+        <div class="constraint">Per-claim confidence rating required</div>
+      </div>
+      <div class="agent-card">
+        <h4>forge-performance-auditor</h4>
+        <span class="sandbox ro">read-only</span>
+        <p>Metric-driven performance auditing. Runs benchmarks, profiles code, reports with reproducible measurements.</p>
+        <div class="constraint">Every finding needs exact reproduction command</div>
+        <div class="constraint">Baseline + measured + threshold per metric</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>Forge Skills Suite v1.0.0 &mdash; <a href="https://github.com/gradigit/claude-skills">gradigit/claude-skills</a> &mdash; MIT License</p>
+  </div>
+</footer>
+
+</body>
+</html>

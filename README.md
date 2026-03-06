@@ -47,6 +47,28 @@ Claude Code sessions are ephemeral, but project context shouldn't be. These skil
 
 Standalone skill. No dependencies on other skills in this collection.
 
+### Forge (Autonomous Workflows)
+
+| Skill | Layer | Version | Description |
+|-------|-------|---------|-------------|
+| [forge-claude-teams](.claude/skills/forge-claude-teams/) | 0 (practices) | 1.0.0 | Claude Code best practices for Agent tool, TeamCreate, SendMessage |
+| [forge-codex-multiagent](.claude/skills/forge-codex-multiagent/) | 0 (practices) | 1.0.0 | Codex CLI best practices for spawn_agent, fork_context, batch processing |
+| [forge-research](.claude/skills/forge-research/) | 1 (capability) | 1.0.0 | Autonomous multi-agent research with hypothesis tracking and adversarial challenge |
+| [forge-builder](.claude/skills/forge-builder/) | 1 (capability) | 1.0.0 | Autonomous building/coding with self-review, self-improvement, and quality gates |
+| [forge-orchestrator](.claude/skills/forge-orchestrator/) | 2 (orchestrator) | 1.0.0 | Sequences research and building through milestone-gated cycles with compound learning |
+
+Layered architecture with custom agents for execution isolation:
+
+```
+forge-orchestrator (Layer 2)
+  ├── forge-research (Layer 1) ──→ forge-claude-teams OR forge-codex-multiagent (Layer 0)
+  ├── forge-builder (Layer 1) ──→ forge-claude-teams OR forge-codex-multiagent (Layer 0)
+  └── Custom Agents: forge-adversarial-reviewer, forge-build-worker,
+                     forge-research-worker, forge-performance-auditor
+```
+
+Use `/forge [goal]` to launch the orchestrator, or invoke Layer 1 skills standalone with `/forge-research [topic]` or `/forge-builder [task]`. See [AGENTS.md](AGENTS.md) for the full dependency graph and custom agent details.
+
 ## Why These Exist
 
 Claude Code sessions are stateless — context is lost on `/clear` or crash. After enough sessions where I had to re-explain project state from scratch, I built these skills to fix three things:
@@ -179,6 +201,18 @@ updating-skills ──→ creating-skills (spec rules)
 testing-skills ──→ creating-skills (EVALUATIONS.md format)
 
 study (standalone)
+
+forge-orchestrator ──→ forge-research (research phase)
+                   └──→ forge-builder (build phase)
+                   └──→ forge-claude-teams OR forge-codex-multiagent (platform practices)
+                   └──→ forge-adversarial-reviewer, forge-build-worker,
+                        forge-research-worker, forge-performance-auditor (custom agents)
+
+forge-research ──→ forge-claude-teams OR forge-codex-multiagent (platform practices)
+               └──→ study (optional, fallback to direct WebSearch)
+               └──→ forge-adversarial-reviewer (optional, for adversarial challenge)
+
+forge-builder ──→ forge-claude-teams OR forge-codex-multiagent (platform practices)
 ```
 
 `wrap` chains three skills sequentially by default, with an optional fourth step (`--with-fresh`) for `handoff-fresh`. If a dependency isn't installed, that step can be skipped — but the full workflow works best with all session management skills present.
