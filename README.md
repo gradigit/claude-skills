@@ -51,11 +51,11 @@ Standalone skill. No dependencies on other skills in this collection.
 
 | Skill | Layer | Version | Description |
 |-------|-------|---------|-------------|
-| [forge-claude-teams](.claude/skills/forge-claude-teams/) | 0 (practices) | 1.0.0 | Claude Code best practices for Agent tool, TeamCreate, SendMessage |
-| [forge-codex-multiagent](.claude/skills/forge-codex-multiagent/) | 0 (practices) | 1.0.0 | Codex CLI best practices for spawn_agent, fork_context, batch processing |
-| [forge-research](.claude/skills/forge-research/) | 1 (capability) | 1.0.0 | Autonomous multi-agent research with hypothesis tracking and adversarial challenge |
-| [forge-builder](.claude/skills/forge-builder/) | 1 (capability) | 1.0.0 | Autonomous building/coding with self-review, self-improvement, and quality gates |
-| [forge-orchestrator](.claude/skills/forge-orchestrator/) | 2 (orchestrator) | 1.0.0 | Sequences research and building through milestone-gated cycles with compound learning |
+| [forge-claude-teams](.claude/skills/forge-claude-teams/) | 0 (practices) | 1.1.0 | Claude Code best practices for Agent tool, TeamCreate, SendMessage |
+| [forge-codex-multiagent](.claude/skills/forge-codex-multiagent/) | 0 (practices) | 1.1.0 | Codex CLI best practices for spawn_agent, fork_context, batch processing |
+| [forge-research](.claude/skills/forge-research/) | 1 (capability) | 1.1.0 | Autonomous multi-agent research with hypothesis tracking and adversarial challenge |
+| [forge-builder](.claude/skills/forge-builder/) | 1 (capability) | 1.2.0 | Autonomous building/coding with self-review, self-improvement, and quality gates |
+| [forge-orchestrator](.claude/skills/forge-orchestrator/) | 2 (orchestrator) | 1.4.0 | Sequences research and building through milestone-gated cycles with compound learning |
 
 Layered architecture with custom agents for execution isolation:
 
@@ -79,85 +79,31 @@ Claude Code sessions are stateless — context is lost on `/clear` or crash. Aft
 
 ## Installation
 
-### Guided install via AI agent
+### One-liner
 
-Paste this repo URL into Claude and ask it to install skills. Claude will guide you through the full process interactively.
-
-**Instructions for the AI agent:**
-
-Follow these steps in order. Use `AskUserQuestion` for all questions where it is available.
-
-**Step 1 — Language**
-
-Ask (single select):
-```
-[ ] English
-[ ] 한국어
-```
-Use the chosen language for all questions, descriptions, and confirmations from this point on. Skill file contents (SKILL.md) are always in English and should not be modified — only the wizard UI is translated.
-
-**Step 2 — Check installed state (silent)**
-
-Check `~/.claude/skills/` for any skills already installed from this repo. Compare versions against the repo. If any are installed, proceed to Step 3. Otherwise skip to Step 4.
-
-**Step 3 — Returning user (only if skills already installed)**
-
-Ask (single select):
-```
-[ ] Update my installed skills
-[ ] Install skills I don't have yet
-[ ] Both
-```
-Show a version diff before proceeding, e.g.: "`handoff` 2.4.0 → 2.5.0 · `syncing-docs` 2.5.0 → 2.6.0 · `handoff-fresh` 1.8.0 → 1.9.0"
-
-**Step 4 — Detail level**
-
-Ask (single select):
-```
-[ ] Full explanation — walk me through each skill with use cases and examples
-[ ] Basic explanation — just the one-liners
-[ ] I'm an experienced user, I'll select the skills myself
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/gradigit/claude-skills/main/install.sh)
 ```
 
-**Step 5 — Present skills and pick**
+Install everything non-interactively:
 
-Fetch all `SKILL.md` files from `.claude/skills/` in this repo. Parse `name`, `description`, and `metadata.tags` from each frontmatter. Present skills grouped by category at the detail level chosen in Step 4. Mark already-installed skills with their current version.
-
-Then ask (multi-select):
-```
-[ ] {skill name} — {description}
-[ ] ...
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/gradigit/claude-skills/main/install.sh) --all
 ```
 
-**Step 6 — Install location**
+### AI-guided install
 
-Ask (single select):
+Copy this prompt into Claude Code, Codex, or any AI coding agent:
+
 ```
-[ ] ~/.claude/skills/ — global, works in all projects (Recommended)
-[ ] .claude/skills/ — current project only
+Install skills from https://github.com/gradigit/claude-skills — read INSTALL.md and follow the install wizard.
 ```
 
-**Step 7 — Dependency resolution (silent)**
+The agent will walk you through language selection, skill picking, and installation interactively. Full wizard steps: [INSTALL.md](INSTALL.md)
 
-Before installing, auto-resolve dependencies:
-- `wrap` requires `handoff`, `syncing-docs`, `managing-doc-manifest` — add any missing ones and tell the user
-- `wrap --with-fresh` additionally requires `handoff-fresh`
-- `updating-skills` works best with `auditing-skills` and `testing-skills` — add if missing and tell the user
-- If a skill dir already exists but is not from this repo, warn before overwriting
+### Manual install
 
-**Step 8 — Install**
-
-Copy each selected skill directory to the chosen location. For each skill being overwritten, show the version change (e.g. `handoff` 2.4.0 → 2.5.0).
-
-Also copy matching command entry files from `.claude/commands/` when present (for example `handoff.md`, `handoff-fresh.md`, `wrap.md`) so slash-command paths stay explicit.
-
-**Step 9 — Post-install summary**
-
-List every installed skill with its slash command (e.g. `/handoff`, `/study`). For users who chose full or basic explanation, show one example prompt per skill. End with:
-
-> "To get updates or install more skills later, just paste this repo link into Claude again."
-
-### Option 1: Clone into a project (project-level)
+#### Option 1: Clone into a project (project-level)
 
 ```bash
 # Clone into your project — skills are auto-discovered
@@ -167,7 +113,7 @@ cp -r /tmp/claude-skills/.claude/skills/* your-project/.claude/skills/
 cp -r /tmp/claude-skills/.claude/commands/* your-project/.claude/commands/
 ```
 
-### Option 2: Install globally (all projects)
+#### Option 2: Install globally (all projects)
 
 ```bash
 git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
@@ -176,7 +122,7 @@ cp -r /tmp/claude-skills/.claude/skills/* ~/.claude/skills/
 cp -r /tmp/claude-skills/.claude/commands/* ~/.claude/commands/
 ```
 
-### Option 3: Use as additional directory
+#### Option 3: Use as additional directory
 
 ```bash
 git clone https://github.com/gradigit/claude-skills.git ~/claude-skills
