@@ -2,6 +2,59 @@
 
 Opinionated workflow tools for [Claude Code](https://code.claude.com) that I built and refined through daily use. They handle session management, project documentation, and skill development. They work best as a set, but individual skills can be used standalone where noted.
 
+## Installation
+
+### One-liner
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/gradigit/claude-skills/main/install.sh)
+```
+
+Install everything non-interactively:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/gradigit/claude-skills/main/install.sh) --all
+```
+
+### AI-guided install
+
+Copy this prompt into Claude Code, Codex, or any AI coding agent:
+
+```
+Install skills from https://github.com/gradigit/claude-skills — read INSTALL.md and follow the install wizard.
+```
+
+The agent will walk you through language selection, skill picking, and installation interactively. Full wizard steps: [INSTALL.md](INSTALL.md)
+
+### Manual install
+
+#### Option 1: Clone into a project (project-level)
+
+```bash
+# Clone into your project — skills are auto-discovered
+git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
+mkdir -p your-project/.claude/skills your-project/.claude/commands
+cp -r /tmp/claude-skills/.claude/skills/* your-project/.claude/skills/
+cp -r /tmp/claude-skills/.claude/commands/* your-project/.claude/commands/
+```
+
+#### Option 2: Install globally (all projects)
+
+```bash
+git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
+mkdir -p ~/.claude/skills ~/.claude/commands
+cp -r /tmp/claude-skills/.claude/skills/* ~/.claude/skills/
+cp -r /tmp/claude-skills/.claude/commands/* ~/.claude/commands/
+```
+
+#### Option 3: Use as additional directory
+
+```bash
+git clone https://github.com/gradigit/claude-skills.git ~/claude-skills
+# Then in Claude Code:
+claude --add-dir ~/claude-skills
+```
+
 ## Skills
 
 ### Meta / Skill Tooling
@@ -76,59 +129,6 @@ Claude Code sessions are stateless — context is lost on `/clear` or crash. Aft
 - `handoff` captures what was done, what failed, and what's next. A new session reads HANDOFF.md and picks up where the last one left off.
 - `syncing-docs` detects when code changes make docs stale and fixes them. No more outdated README sections or wrong file paths in CLAUDE.md.
 - The meta-tooling skills (`creating-skills`, `updating-skills`, `auditing-skills`, `testing-skills`) enforce consistency so skills don't degrade as you iterate on them.
-
-## Installation
-
-### One-liner
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/gradigit/claude-skills/main/install.sh)
-```
-
-Install everything non-interactively:
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/gradigit/claude-skills/main/install.sh) --all
-```
-
-### AI-guided install
-
-Copy this prompt into Claude Code, Codex, or any AI coding agent:
-
-```
-Install skills from https://github.com/gradigit/claude-skills — read INSTALL.md and follow the install wizard.
-```
-
-The agent will walk you through language selection, skill picking, and installation interactively. Full wizard steps: [INSTALL.md](INSTALL.md)
-
-### Manual install
-
-#### Option 1: Clone into a project (project-level)
-
-```bash
-# Clone into your project — skills are auto-discovered
-git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
-mkdir -p your-project/.claude/skills your-project/.claude/commands
-cp -r /tmp/claude-skills/.claude/skills/* your-project/.claude/skills/
-cp -r /tmp/claude-skills/.claude/commands/* your-project/.claude/commands/
-```
-
-#### Option 2: Install globally (all projects)
-
-```bash
-git clone https://github.com/gradigit/claude-skills.git /tmp/claude-skills
-mkdir -p ~/.claude/skills ~/.claude/commands
-cp -r /tmp/claude-skills/.claude/skills/* ~/.claude/skills/
-cp -r /tmp/claude-skills/.claude/commands/* ~/.claude/commands/
-```
-
-#### Option 3: Use as additional directory
-
-```bash
-git clone https://github.com/gradigit/claude-skills.git ~/claude-skills
-# Then in Claude Code:
-claude --add-dir ~/claude-skills
-```
 
 ## Dependencies
 
