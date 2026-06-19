@@ -3,7 +3,7 @@ name: forge-codex-multiagent
 description: "Codifies best practices for Codex CLI multi-agent features: spawn_agent, fork_context, send_input, batch processing. Reference guide for building effective agent workflows with conflict prevention and error recovery. Do NOT use when working with Claude Code — use forge-claude-teams instead."
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.1.1"
   author: gradigit
   category: forge
   tags:
@@ -37,13 +37,14 @@ Creates a child agent with a specific task.
 
 ```python
 agent_id = spawn_agent(
-    name="research-auth",
-    instructions="...",     # Must follow 5-component context handoff
-    model=None              # Optional — inherits main model if omitted
+    agent_type="worker",    # Built-in (default/worker/explorer/monitor) or a custom role name
+    message="...",          # The task — must follow the 5-component context handoff below
+    model=None,             # Optional — inherits main model if omitted
+    fork_context=False      # Optional — clone current context into the child (see fork_context)
 )
 ```
 
-**Context handoff template** (required in `instructions`):
+**Context handoff template** (required in `message`):
 
 | Component | Content | Example |
 |-----------|---------|---------|
@@ -53,7 +54,7 @@ agent_id = spawn_agent(
 | **Boundaries** | What to ignore, what others own | "Do NOT modify src/routes/ or test/" |
 | **Output contract** | Format, location, completion signal | "Write findings to output/auth-analysis.md, print DONE when complete" |
 
-> **Verify**: Confirm `spawn_agent` accepts `name`, `instructions`, and optional `model` parameters in your Codex version.
+> **Verify**: Confirm `spawn_agent` accepts `agent_type`, `message`, and optional `model`/`fork_context` parameters in your Codex version. (The live 0.140.x binary uses these names — older drafts of this guide showed `name=`/`instructions=`, which the tool does not accept.)
 
 ### send_input
 
@@ -132,34 +133,45 @@ fork_id = fork_context(
 
 ## 1b. Custom Agent Roles
 
-Codex supports custom agent roles via `[agents.<name>]` in `config.toml`. Each role can override model, sandbox mode, and developer instructions.
+Codex loads custom agent roles from **per-file TOMLs** — one file per role at
+`~/.codex/agents/<name>.toml` (personal) or `.codex/agents/<name>.toml`
+(project-level, installed alongside skills). This is the mechanism the forge
+roles ship with and the one that loads reliably.
 
 ```toml
-# ~/.codex/config.toml or .codex/config.toml (project-level)
-[agents]
-max_threads = 6
-max_depth = 1
-
-[agents.my-reviewer]
+# ~/.codex/agents/my-reviewer.toml
+name = "my-reviewer"
 description = "When to use this role"
-config_file = "path/to/role-config.toml"    # Overrides for this role
-```
-
-**Role-specific config** (separate TOML file):
-```toml
-sandbox_mode = "read-only"
+sandbox_mode = "read-only"    # read-only | workspace-write | danger-full-access
 developer_instructions = """
 Your system prompt here. Use the same XML structure
 (objective, context, output-format, boundaries) as Claude Code agents.
 """
 ```
 
+Each role file requires a non-empty `name`; the valid `sandbox_mode` values are
+exactly `read-only`, `workspace-write`, and `danger-full-access` (the older
+`full-access` value is rejected at load time by current Codex).
+
+Global limits live under a `[agents]` table in `config.toml`:
+
+```toml
+# ~/.codex/config.toml or .codex/config.toml (project-level)
+[agents]
+max_threads = 3    # see max_threads guidance in Section 2
+```
+
+> **Legacy/alternate**: Codex also compiles in an inline `[agents.<name>]`
+> config.toml form with a `config_file` pointer. Prefer the per-file model
+> above — the inline form has known config-loading caveats (roles can fail with
+> "unknown agent_type" unless `-c`-injected; see openai/codex#14579, #15250).
+
 **Forge agent roles**: The forge pipeline includes 4 predefined roles:
 
 | Role | Sandbox | Purpose |
 |------|---------|---------|
 | `forge-adversarial-reviewer` | read-only | Critical review with confidence gating |
-| `forge-build-worker` | full-access | Implementation within file scope |
+| `forge-build-worker` | danger-full-access | Implementation within file scope |
 | `forge-research-worker` | read-only | Web research + codebase exploration |
 | `forge-performance-auditor` | read-only | Metric-driven benchmarking |
 
@@ -167,7 +179,9 @@ Role config files: `.codex/agents/forge-*.toml` (installed alongside skills).
 
 **Built-in roles**: Codex also ships with `default`, `worker`, `explorer`, and `monitor`. Use forge roles for structured output with quality bars; use built-in roles for ad-hoc work.
 
-> **Verify**: Confirm `[agents.<name>]` config syntax and `config_file` path resolution match your Codex version. Enable with `multi_agent = true` in `[features]`.
+> **Known limitation**: In tool-backed sessions, `spawn_agent` may only resolve the built-in `agent_type` values (`default`/`worker`/`explorer`/`monitor`) and not select per-file custom roles by name (openai/codex#15250). Session-log analysis confirms real `spawn_agent` calls used built-in types, never `forge-*` role names. Until this is fixed upstream, treat the forge role TOMLs as developer-instruction templates: their content can be passed via `message`/`base_instructions` even when the role can't be selected by name.
+
+> **Verify**: Confirm per-file `~/.codex/agents/*.toml` role loading (and the legacy `[agents.<name>]` form, if used) match your Codex version, and test whether `spawn_agent` can select a forge role by name. Enable multi-agent with `multi_agent = true` in `[features]`.
 
 ---
 
@@ -205,14 +219,20 @@ Controls maximum parallel agents. Governed by Gunther's Universal Scalability La
 
 | Setting | Threads | Use case |
 |---------|---------|----------|
-| Conservative (default) | 3 | Standard multi-agent work |
+| Conservative (forge default) | 3 | Standard multi-agent work |
 | Moderate | 5 | Independent, non-conflicting tasks |
-| Maximum | 7 | Absolute ceiling — never exceed |
+| Maximum | 7 | Forge ceiling — coordination overhead dominates beyond this |
 
 ```python
-# Set in Codex config or environment
-max_threads = 3    # Default, recommended for most work
+# Set in Codex config (~/.codex/config.toml under [agents])
+max_threads = 3    # Forge recommendation for most work
 ```
+
+> **Note**: 3 and 7 are forge recommendations, not Codex limits. Codex's own
+> `max_threads` default is 6 with no hard upper cap (real-world configs set it as
+> high as 100). The 7 ceiling below is forge guidance based on coordination
+> overhead, not a CLI constraint — raise it deliberately for genuinely
+> independent fan-out work.
 
 **Why 7 is the ceiling**: Beyond 7 parallel agents, coordination overhead (context switching, conflict resolution, output merging) exceeds the throughput gained. Observed in session logs: 7+ agents consistently produced more merge conflicts than time saved.
 
@@ -483,7 +503,7 @@ you into the next step and keeps the turn alive.
 ## Quick Reference Card
 
 ```
-CREATE:    agent_id = spawn_agent(name, instructions, [model])
+CREATE:    agent_id = spawn_agent(agent_type, message, [model], [fork_context])
 SEND:      send_input(agent_id, message)          # running agents only
 WAIT:      result = wait(agent_id, [timeout])      # synchronous block
 RESUME:    resume_agent(agent_id)                   # restart suspended
@@ -492,7 +512,7 @@ FORK:      fork_id = fork_context(instructions)     # clone context
 BATCH:     agents = spawn_agents_on_csv(csv, tpl)   # CSV batch spawn
 
 SIGNALS:   HALT | SKIP | IDLE | DONE               # batch mode protocol
-THREADS:   max_threads = 3 (default), 7 (ceiling)
+THREADS:   max_threads = 3 (forge default), 7 (forge ceiling)  # Codex default 6, no hard cap
 SCOPE:     Always declare. Never modify outside scope.
 RECOVERY:  close → spawn fresh (never send_input to failed)
 ```
@@ -507,4 +527,4 @@ Update this skill when:
 3. **Conflict strategies**: Better isolation or merging approaches discovered
 4. **User corrections**: Real-world usage reveals incorrect guidance
 
-Current version: 1.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.1.1. See [CHANGELOG.md](CHANGELOG.md) for history.

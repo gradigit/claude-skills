@@ -47,7 +47,7 @@ Tier 0 (structured scope declarations) + Tier 1 (warn-only scope guard). Researc
 - Added COMPOUND step 9: "Transition to next milestone immediately" — explicit continuation directive to read TODO.md for next milestone scope after git commit, preventing Codex CLI turn-ending between milestones
 
 ### Context
-On Codex CLI, the COMPOUND step writes 6+ state files then the model naturally produces a text summary, which ends the turn (no tool calls = turn over). Step 9 ensures the model reads the next milestone scope immediately after committing, keeping the turn alive. Research: `architect/research/codex-turn-lifecycle-fix.md`. General Turn Lifecycle guidance added in forge-codex-multiagent v1.1.0.
+On Codex CLI, the COMPOUND step writes 6+ state files then the model naturally produces a text summary, which ends the turn (no tool calls = turn over). Step 9 ensures the model reads the next milestone scope immediately after committing, keeping the turn alive. General Turn Lifecycle guidance added in forge-codex-multiagent v1.1.0.
 
 ## [1.1.0] - 2026-03-03
 
