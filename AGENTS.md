@@ -25,12 +25,12 @@ Agent-facing project context. Shared across Claude Code and Codex CLI for cross-
 
 ### Codex CLI Agent Roles
 
-The same 4 agents are available as Codex custom roles via `[agents.<name>]` in `config.toml`:
+The same 4 agents are available as Codex custom roles, each defined in a per-file role TOML under `~/.codex/agents/<name>.toml` (personal) or `.codex/agents/<name>.toml` (project-level). The inline `[agents.<name>]` form in `config.toml` is a legacy alternate with known config-loading caveats (openai/codex#14579, #15250) — prefer the per-file files below:
 
 | Role | Config File | Sandbox |
 |------|-------------|---------|
 | `forge-adversarial-reviewer` | `.codex/agents/forge-adversarial-reviewer.toml` | read-only |
-| `forge-build-worker` | `.codex/agents/forge-build-worker.toml` | full-access |
+| `forge-build-worker` | `.codex/agents/forge-build-worker.toml` | danger-full-access |
 | `forge-research-worker` | `.codex/agents/forge-research-worker.toml` | read-only |
 | `forge-performance-auditor` | `.codex/agents/forge-performance-auditor.toml` | read-only |
 

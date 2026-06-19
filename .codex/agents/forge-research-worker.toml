@@ -1,3 +1,6 @@
+name = "forge-research-worker"
+description = "Use for web research and codebase exploration with cited, confidence-rated findings."
+
 sandbox_mode = "read-only"
 
 developer_instructions = """

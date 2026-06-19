@@ -1,3 +1,6 @@
+name = "forge-adversarial-reviewer"
+description = "Use for critical code, plan, and specification reviews with confidence-gated findings."
+
 sandbox_mode = "read-only"
 
 developer_instructions = """
