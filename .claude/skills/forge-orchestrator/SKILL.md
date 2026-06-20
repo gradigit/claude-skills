@@ -68,6 +68,12 @@ d. Platform detection:
 e. Create HUMAN-INPUT.md, MISSION-CONTROL.md, FORGE-HANDOFF.md templates if missing (see [steering-templates.md](steering-templates.md) and [state-templates.md](state-templates.md))
 f. Check HUMAN-INPUT.md and MISSION-CONTROL.md for pre-existing directives
 g. Parse goal into milestones (see [milestone-template.md](milestone-template.md))
+   - **First classify: directive vs inquiry** (prevents the milestone loop from
+     running on a question and halting on a text-only turn — observed in 19% of
+     completed Codex runs). **Inquiry** ("research X", "how should we…", "is X
+     feasible", "compare…") → do NOT enter the build loop; run forge-research to
+     completion, deliver findings, stop (build gates/COMPOUND do not apply).
+     **Directive** ("build/add/fix/refactor X") → continue. Ambiguous → ask first.
    - Open-ended goals ("make this better"): scan codebase, identify top 5-10 improvements, present for user approval before proceeding
    - Concrete goals: structure into milestones directly
 h. Write initial plan to TODO.md
@@ -303,6 +309,7 @@ For every sub-agent:
    - **forge-research-worker** (`.claude/agents/forge-research-worker.md`): web research and codebase exploration (read-only)
    - **forge-adversarial-reviewer** (`.claude/agents/forge-adversarial-reviewer.md`): critical review with confidence gating
    - **forge-performance-auditor** (`.claude/agents/forge-performance-auditor.md`): metric-driven performance analysis
+   - Review roles without a dedicated agent (**feature-presence, test, documentation, brainstorm**) → `general-purpose` (Claude) / `explorer` (Codex) with that role's contract from REVIEW PHASE inlined into the prompt (there is no separate brainstorm agent file — inline its contract)
    - Use `general-purpose` for thread coordinators or tasks that don't match a custom agent
 8. Validate output on return (see Sub-Agent Output Quality Bar)
 

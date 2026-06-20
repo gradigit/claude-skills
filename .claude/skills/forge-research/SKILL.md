@@ -51,6 +51,11 @@ Launches autonomous multi-agent research campaigns with hypothesis tracking and 
 
 **Why gates matter:** Without explicit gates, the natural tendency is to shortcut from "spawn agents" to "write output," skipping hypothesis tracking, adversarial review, and depth research. These are the steps that make forge-research produce better results than a simple multi-agent search.
 
+> **Codex turn keep-alive (at synthesis):** On Codex CLI a text-only response ends
+> the turn. After writing a synthesis/findings file, if more depth cycles remain,
+> immediately read the output back (a tool call) to start the next cycle rather
+> than ending on a prose summary. (See forge-codex-multiagent §9.)
+
 ---
 
 ## Step 1: Parse Research Directive

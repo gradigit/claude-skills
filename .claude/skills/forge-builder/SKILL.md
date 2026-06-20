@@ -64,6 +64,12 @@ For directives, auto-detect input:
 
 **Why gates matter:** Without them, the natural tendency is to skip directly from reading the task to writing code, bypassing platform detection (which governs isolation and conflict prevention) and planning (which prevents rework). The build phases (Step 4) have their own quality gates already — the risk is in the pre-build steps.
 
+> **Codex turn keep-alive (between build phases):** On Codex CLI a text-only
+> response (no tool calls) ends the turn and halts the build. After completing a
+> phase, do NOT emit a standalone "phase N done" summary — pair the transition
+> with a tool call (read the next phase's inputs / mark TODO.md and read on). Save
+> the prose summary for the final step only. (See forge-codex-multiagent §9.)
+
 ---
 
 ## Step 1: Parse Build Directive

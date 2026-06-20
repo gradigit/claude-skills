@@ -183,6 +183,34 @@ Role config files: `.codex/agents/forge-*.toml` (installed alongside skills).
 
 > **Verify**: Confirm per-file `~/.codex/agents/*.toml` role loading (and the legacy `[agents.<name>]` form, if used) match your Codex version, and test whether `spawn_agent` can select a forge role by name. Enable multi-agent with `multi_agent = true` in `[features]`.
 
+### 1c. Codex Role Selection — prompt-templates (workaround for #15250)
+
+Session-log analysis of real forge runs found the forge-* roles were spawned by
+name **0 times across 98 Codex runs** (agent_type was always `explorer`/`default`/
+`worker`), so the fresh-context review fan-out silently degraded to undifferentiated
+explorers. Until by-name selection works on Codex, **select the role by injecting
+its prompt-template**, not its name:
+
+- Pick the closest built-in `agent_type` (read-only roles → `explorer`; build role
+  → `worker`).
+- Prepend the role's **identity + quality bar** to `message` (or pass via
+  `base_instructions`). The role TOMLs in `.codex/agents/forge-*.toml` are the
+  source of that text — treat them as prompt templates, not selectable names.
+- Always inject the **7-tag context handoff template** (Section on Agent Spawning
+  in forge-orchestrator) into every spawn — the 7-tag form was used in only ~5% of
+  Codex spawns; programmatic injection fixes that.
+
+| Forge role | Codex `agent_type` | Inline this quality bar in `message` |
+|------------|--------------------|--------------------------------------|
+| forge-adversarial-reviewer | `explorer` | confidence-gated findings (>80%), evidence required, excluded-list for low-confidence |
+| forge-research-worker | `explorer` | read-only, cite every source, Rule-of-Two, structured findings |
+| forge-performance-auditor | `explorer` | metric-backed only, reproducible commands, baseline/measured/threshold |
+| forge-build-worker | `worker` | FILE SCOPE own/read/deny, self-verify against spec, run tests after changes |
+
+> These are **prompt-role** distinctions on Codex, not `agent_type` distinctions.
+> On Claude Code the roles ARE selectable by name (use `subagent_type`); keep both
+> paths. Re-test by-name selection per Codex version (the Verify note above).
+
 ---
 
 ## 2. Batch Processing
@@ -359,8 +387,9 @@ Agents print signals to stdout. Orchestrator monitors and reacts.
 
 | Failure type | Detection | Recovery |
 |--------------|-----------|----------|
-| Agent crash | `wait` returns error / no output | `close_agent` for partial output, `spawn_agent` fresh |
-| Timeout exceeded | `wait` timeout expires | `close_agent`, retry with simplified task |
+| **429 / rate limit** | spawn/wait errors with 429 or "temporarily limiting requests" | **NOT a logical failure** — back off + retry the SAME task (see Rate-Limit Resilience); never re-spawn blind |
+| Agent crash | `wait_agent` returns error / no output | `close_agent` for partial output, `spawn_agent` fresh |
+| Timeout exceeded | `wait_agent` timeout expires | `close_agent`, retry with simplified task |
 | Garbage output | Output fails validation | `close_agent`, `spawn_agent` with clarified instructions |
 | Scope violation | Agent modified files outside scope | Revert changes, `close_agent`, re-spawn with stricter scope |
 | All retries exhausted | 2+ failures on same task | Escalate to user with failure context |
@@ -389,6 +418,31 @@ Agents print signals to stdout. Orchestrator monitors and reacts.
 - Include failure context in the new agent's instructions so it avoids the same mistake
 - Maximum 2 retries per task, then escalate to the user
 - Timeout exceeded: simplify the task (reduce scope) before retrying
+- **A 429 is NOT a task failure** — do not count it toward the 2-retry budget; back off and resume
+
+### Rate-Limit (429) Resilience
+
+429 / "server is temporarily limiting requests" was the **#1 real Codex failure
+mode** in session-log analysis (1,072 occurrences), and ~46% of unique spawns were
+**blind re-spawns of an identical task** after a 429 — wasting budget and worsening
+the storm. Treat rate limits as a distinct, transient condition:
+
+- **Distinguish** a 429 from a logical failure. A 429 means "retry later", not
+  "the task was wrong". Never clarify/simplify the task in response to a 429.
+- **Exponential backoff with jitter**: on 429, wait ~base·2^n (e.g. 5s, 10s, 20s,
+  40s…) before retrying the *same* spawn; cap the backoff and the attempts.
+- **Spawns-per-minute budget**: cap how many spawns you launch per minute (in
+  addition to the `max_threads` per-wait ceiling). Sustained volume, not just
+  per-batch width, triggers the storm.
+- **Pause-and-drain**: on repeated 429s, stop launching new spawns, let in-flight
+  agents drain, then resume at a lower rate.
+- **Dedup cache**: key completed/in-flight work by a task signature (role + scope +
+  message hash). If a 429 interrupts, **resume/await** the existing agent rather
+  than spawning a duplicate.
+
+> The orchestrator's own batch ceilings (Section 2 `max_threads`, 1–4 per wait) cap
+> width; this section caps *rate over time* and prevents the blind-re-spawn
+> amplification.
 
 ---
 
