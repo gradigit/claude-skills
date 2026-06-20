@@ -5,6 +5,15 @@ All notable changes to this skill will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] - 2026-06-20
+
+### Added
+- **Checkout binding**: Current State now records the absolute checkout/worktree path +
+  branch the handoff was written from (`git rev-parse --show-toplevel` + branch). In repos
+  with parallel worktrees this lets `/pickup` confirm a handoff belongs to the checkout
+  being resumed and flag a cross-worktree mismatch. Pairs with pickup 1.2.0
+  (current-checkout-first resolution).
+
 ## [3.1.1] - 2026-06-20
 
 ### Fixed

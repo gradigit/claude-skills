@@ -3,7 +3,7 @@ name: handoff
 description: Creates context handoff files that preserve session state for seamless continuation after /clear. Manual command entry point is /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions. Defaults to local git-ignore for handoff artifacts so they do not pollute working tree status. Use handoff-fresh for brand-new/forked-repo onboarding bundles.
 license: MIT
 metadata:
-  version: "3.1.1"
+  version: "3.1.2"
   author: gradigit
   updated: "2026-06-20"
   tags:
@@ -179,6 +179,11 @@ Every generated `HANDOFF.md` must include, and they must be non-empty (or marked
 - **Line 1 schema marker**: `<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff -->` —
   lets `/pickup` detect the schema/producer and tell skill-generated from
   hand-written handoffs.
+- **Checkout binding** (in Current State): record the absolute checkout/worktree path
+  + branch this handoff was written from (`git rev-parse --show-toplevel` + branch).
+  In a repo with parallel worktrees this lets `/pickup` confirm a handoff belongs to
+  the checkout being resumed and flag a cross-worktree mismatch instead of silently
+  resuming from a sibling session's handoff.
 - **`## Last Exchange (Verbatim)`** (after Session Summary): the verbatim last
   user prompt, last assistant response, and load-bearing earlier directives
   captured in Step 0. This is the resume anchor `/pickup` reads first.
@@ -331,6 +336,7 @@ git commit -m "WIP: JWT auth middleware with refresh token rotation"
 - Started unit tests (3 of 8 passing)
 
 ### Current State
+- Checkout: /Users/you/project/.worktrees/feature-auth (branch: feature-auth)
 - Files modified: src/middleware/auth.ts, src/routes/login.ts, tests/auth.test.ts
 - Last commit: abc1234 — WIP: JWT auth middleware with refresh token rotation
 
@@ -417,6 +423,11 @@ Update this skill when:
 
 **Applied Learnings:**
 
+- v3.1.2: **Checkout binding** for parallel-worktree safety. The generated handoff now
+  records the absolute checkout/worktree path + branch in Current State, so `/pickup` can
+  confirm a handoff belongs to the checkout being resumed and flag a cross-worktree
+  mismatch instead of silently resuming from a sibling parallel session's handoff. Pairs
+  with pickup 1.2.0's current-checkout-first rule.
 - v3.1.1: **Verify-honesty at the point of claim** (after-eval regression). Note-sourced
   results (test counts, build/health) must be labeled `(per session notes — unverified)`
   in prose, not only in the Verify Block — the producer-side form of `/pickup`'s
@@ -438,4 +449,4 @@ Update this skill when:
 - v2.0.0: Renamed from handing-off. Fixed frontmatter. Added edge case handling, pitfalls table, git ops table, validation step, concrete example. Extracted templates to templates.md.
 - v1.0.0: Initial version based on forging-plans handoff pattern and external best practices
 
-Current version: 3.1.1. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 3.1.2. See [CHANGELOG.md](CHANGELOG.md) for history.

@@ -3,7 +3,7 @@ name: pickup
 description: The consumer counterpart to handoff/handoff-fresh/wrap. Picks up what was handed off AND where work left off. Manual command entry point is /pickup. Producer-agnostic — detects whichever artifact was written (bundle, canonical HANDOFF.md, or FORGE/CLAUDE pointers), reads the full First-Steps set with enforced receipts, replays the verbatim last exchange, and runs a stakes-tiered verify-still-true gate before acting. Routes the bare "read HANDOFF.md" path here so the default gets the strong behavior. Do NOT use to WRITE a handoff — use handoff/wrap for that.
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.2.0"
   author: gradigit
   updated: "2026-06-20"
   tags:
@@ -105,14 +105,29 @@ timestamp (e.g. CLAUDE.md points at a March `FORGE-*` set while `HANDOFF.md` is
 from June), pick the freshest and explicitly list the others as historical in the
 output drift flags — never silently merge them.
 
-**Search sibling worktrees, not just the cwd.** The live handoff is often in a
-different worktree than the one you started in — a recurring real-world miss is a
-*stale* root `HANDOFF.md` while the active one lives in `worktrees/<feature>/` or a
-sibling checkout. Before choosing, enumerate `HANDOFF.md` / `.handoff-fresh/` across
-the repo's worktrees (`git worktree list`, then search each) or a bounded
-`find . -name HANDOFF.md`. Pick the freshest match whose content matches the user's
-stated intent (e.g. "the auth work" → the worktree handoff about auth), and list the
-others as historical.
+**Scope to your current checkout first — recency across checkouts is NOT precedence.**
+When the repo has parallel worktrees / sibling checkouts (the user runs several
+sessions at once, each in its own checkout to avoid clobbering), the authoritative
+handoff for THIS session is the one in **your current checkout (`cwd`)** — *not* the
+globally-freshest one. A *newer* handoff in a sibling checkout almost always belongs
+to a **different parallel session**; adopting it is the cross-worktree mistake this
+rule exists to prevent. Determine your checkout root once (`git rev-parse --show-toplevel`).
+
+Order of resolution:
+1. **Current checkout wins.** If `cwd`'s checkout has a `HANDOFF.md` / `.handoff-fresh/`,
+   that is the default authoritative source — use it. Do **not** switch to a sibling
+   just because it is newer.
+2. **Cross-checkout is a deliberate, flagged fallback**, used only when (a) the current
+   checkout has no handoff, or (b) the current handoff *and* the user's stated intent
+   both point elsewhere (e.g. `cwd`'s handoff says "no active work here" and the user
+   asks for "the auth work" living in `worktrees/feature-auth/`). Enumerate candidates
+   (`git worktree list`, plus sibling `<repo>-<suffix>` checkouts), pick the one
+   **matching the user's intent — never the merely-newest**, and state the cross-checkout
+   jump explicitly in the resume contract.
+3. **When several checkouts have handoffs and intent doesn't disambiguate, surface the
+   list and ask which** — silent freshest-wins is the bug. Always confirm the chosen
+   handoff's own recorded checkout/branch matches where you actually are; a mismatch
+   (handoff written for `worktrees/X` but you are in `worktrees/Y`) is a drift flag.
 
 **Establish direction-of-drift before calling anything stale.** A freshness verdict
 needs evidence of *which side is older*, not merely that two sources disagree.
@@ -315,6 +330,9 @@ NEVER:
 - Skip the rebuild/flag when the artifact is stale
 - Re-ask the user for context the handoff already contains
 - **Report an un-run check as verified** — label it `assumed (unverified)` instead
+- **Adopt a sibling/worktree checkout's handoff because it is newer** than your current
+  checkout's — recency is not cross-checkout precedence; the current checkout wins, and
+  crossing checkouts is an intent-driven, explicitly-flagged fallback
 - **Over-report on a minimal/hand-written artifact.** The weak-contract flag is a
   one-line internal note, not a graded critique. Do not enumerate the v3 sections a
   hand-written file "should" have as if they were findings, and do not narrate
@@ -353,6 +371,13 @@ Update this skill when:
 4. **The handoff contract changes** — keep the schema-marker and Verify-Block parsing in sync
 
 **Applied Learnings:**
+- v1.2.0: **Parallel-worktree correctness.** Replaced the "pick the freshest match across
+  worktrees" rule (which actively grabbed a sibling session's handoff) with **current-
+  checkout-first**: the handoff in `cwd`'s checkout is authoritative; a newer sibling
+  handoff is presumed to belong to a different parallel session. Cross-checkout is now an
+  intent-driven, explicitly-flagged fallback (never recency-driven), with an ask-which when
+  ambiguous and a checkout/branch-mismatch drift flag. Driven by mining real sessions that
+  read a foreign checkout's HANDOFF.md after `/clear` without reading their own.
 - v1.1.1: Closed the residual over-ceremony case the after-eval still caught (C1): Step 5
   and the Step 8 blockers contract no longer instruct flagging a hand-written file's
   missing v3 scaffolding as drift items — it is one weak-contract line, and the repair
@@ -370,4 +395,4 @@ Update this skill when:
   session to a non-First-Steps oracle file.
 - v1.0.0: Initial consumer skill. Producer-agnostic detection (bundle / canonical / FORGE-CLAUDE), skill-owned read-all+receipt guarantee, verbatim-first resume, stakes-tiered verify-still-true gate, and the 5-item resume contract. Generalized the handoff-fresh read-gate validator to the canonical path. Grounded in a session-log eval of real resumes and the swarm-research-droid feedback report.
 
-Current version: 1.1.1. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.2.0. See [CHANGELOG.md](CHANGELOG.md) for history.

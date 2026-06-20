@@ -2,6 +2,24 @@
 
 All notable changes to the pickup skill.
 
+## [1.2.0] - 2026-06-20
+
+### Changed
+- **Parallel-worktree resume correctness (gap #6, deeper):** Step 1 now resolves the
+  handoff **current-checkout-first**. The handoff in `cwd`'s checkout is authoritative;
+  a *newer* handoff in a sibling worktree/checkout is presumed to belong to a **different
+  parallel session** and is NOT adopted on recency. Cross-checkout selection is a
+  deliberate, intent-driven, explicitly-flagged fallback (ask-which when ambiguous), and
+  the chosen handoff's recorded checkout/branch is confirmed against where you actually are
+  (mismatch = drift flag).
+
+### Why
+Supersedes the v1.1.0 "pick the freshest match across worktrees" heuristic, which was
+correct for "stale root vs one live worktree" (C3) but **wrong for parallel active
+worktrees** — it would grab a sibling session's newer handoff. Driven by mining real
+post-`/clear` sessions that read a foreign checkout's `HANDOFF.md` without reading their
+own. Pairs with handoff 3.1.2's checkout-binding line.
+
 ## [1.1.1] - 2026-06-20
 
 ### Fixed
