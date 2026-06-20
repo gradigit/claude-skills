@@ -5,6 +5,22 @@ All notable changes to this skill will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-06-20
+
+### Added
+- Line-1 schema marker `<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff -->` so the new `/pickup` consumer can detect schema/producer and distinguish skill-generated from hand-written handoffs
+- Mandatory `## Last Exchange (Verbatim)` section — last user prompt + last assistant response (+ load-bearing earlier directives), quoted character-for-character as the resume anchor
+- Step 0: capture the verbatim last exchange first, before any compaction can discard it (manual, no auto-hooks); compaction-boundary handling guidance
+- Mandatory machine-runnable `## Verify Block` (`claim | check-command | expected`) that `/pickup` executes on resume
+- Step 6 content-completeness assertions (verbatim exchange, verify block, what's-next, blockers, current state) and a full-overwrite finalize rule
+
+### Changed
+- Bootstrap Read Rule now points at `/pickup` as the preferred consumer; the embedded rule is a hint, not the enforcement mechanism (the guarantee lives in `/pickup`)
+- Worked example updated to schema v3
+
+### Breaking
+- New mandatory sections + line-1 marker change the HANDOFF.md schema. Old/hand-written handoffs lack the marker; `/pickup` still consumes them but flags a weak contract. Re-run `/handoff` to regenerate at v3.
+
 ## [2.5.0] - 2026-02-22
 
 ### Added

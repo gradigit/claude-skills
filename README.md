@@ -72,13 +72,14 @@ These four form a lifecycle: create a skill, update it as you iterate, audit it 
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [handoff](.claude/skills/handoff/) | 2.5.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off (defaults to local git-ignore for handoff artifacts) |
-| [handoff-fresh](.claude/skills/handoff-fresh/) | 1.9.0 | Builds a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repos (defaults to local git-ignore for bundle artifacts) |
+| [handoff](.claude/skills/handoff/) | 3.0.0 | Creates HANDOFF.md so new sessions can pick up where the last one left off — incl. a verbatim last-exchange section and a machine-runnable verify block (defaults to local git-ignore for handoff artifacts) |
+| [handoff-fresh](.claude/skills/handoff-fresh/) | 1.10.0 | Builds a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repos; OKF-lite bundle layout + verbatim/verify artifacts (defaults to local git-ignore for bundle artifacts) |
+| [pickup](.claude/skills/pickup/) | 1.0.0 | The **consumer** counterpart: reads whatever handoff/handoff-fresh/wrap wrote, enforces full read + receipts, replays the verbatim last exchange, and runs a verify-still-true gate before acting |
 | [syncing-docs](.claude/skills/syncing-docs/) | 2.6.0 | Detects drift between code and project state files, fixes owned docs (CLAUDE.md + AGENTS.md) |
 | [managing-doc-manifest](.claude/skills/managing-doc-manifest/) | 1.0.0 | Creates `.doc-manifest.yaml` — a registry of docs and their code references |
-| [wrap](.claude/skills/wrap/) | 1.3.0 | End-of-session coordinator: sync docs, run instruction-doc quality pass (CLAUDE.md + AGENTS.md), then handoff (optional fresh bundle) |
+| [wrap](.claude/skills/wrap/) | 1.4.0 | End-of-session coordinator: sync docs, run instruction-doc quality pass (CLAUDE.md + AGENTS.md), then handoff (optional fresh bundle) |
 
-During work, `syncing-docs` keeps documentation in sync with code changes. At the end of a session, `wrap` chains sync-docs → [claude-md-improver](https://github.com/anthropics/skills) (Anthropic plugin) → handoff. For forked/new-folder continuation by a brand-new agent, run `handoff-fresh` to generate a full onboarding bundle.
+During work, `syncing-docs` keeps documentation in sync with code changes. At the end of a session, `wrap` chains sync-docs → [claude-md-improver](https://github.com/anthropics/skills) (Anthropic plugin) → handoff. For forked/new-folder continuation by a brand-new agent, run `handoff-fresh` to generate a full onboarding bundle. To **resume** the next session, run `pickup` — the consumer counterpart to `wrap` that reads whichever artifact was produced (canonical `HANDOFF.md`, fresh bundle, or `FORGE-*`/CLAUDE.md pointers), enforces a full read with receipts, replays the verbatim last exchange, and verifies the handoff's claims are still true before acting. The bare "read HANDOFF.md" prompt routes to `pickup` so the default path gets the strong behavior.
 
 Claude Code sessions are ephemeral, but project context shouldn't be. These skills maintain CLAUDE.md, AGENTS.md, TODO.md, HANDOFF.md, and `.doc-manifest.yaml` as persistent state files that survive `/clear` and crashes.
 
@@ -88,6 +89,7 @@ Claude Code sessions are ephemeral, but project context shouldn't be. These skil
   - `/sync-docs`
   - `/handoff`
   - `/handoff-fresh`
+  - `/pickup`
   - `/wrap`
 - These flows are manual by default. No implicit side-channel behavior is required.
 - Hook guidance and archive-first cleanup policy for deprecated auto-handoff hooks: see [HOOKS.md](HOOKS.md).
@@ -137,8 +139,14 @@ Claude Code sessions are stateless — context is lost on `/clear` or crash. Aft
 ```
 wrap ──→ syncing-docs ──→ managing-doc-manifest
   │
-  └──→ handoff
-  └──→ handoff-fresh (optional via --with-fresh)
+  └──→ handoff ───────────┐
+  └──→ handoff-fresh ─────┤ (optional via --with-fresh)
+                          │  writes artifacts
+                          ▼
+              pickup (consumer) ◀── "read HANDOFF.md" routes here
+              reads HANDOFF.md / .handoff-fresh bundle / FORGE-* ,
+              enforces full read + receipts, replays verbatim last
+              exchange, runs verify-still-true gate
 
 updating-skills ──→ creating-skills (spec rules)
                 └──→ auditing-skills (validation checklist)

@@ -10,6 +10,9 @@
 - [ ] Generates required files in `.handoff-fresh/current/`
 - [ ] Generates `.handoff-fresh/current/handoff-everything.md`
 - [ ] Includes project context, history, prior plans, and current status across output files
+- [ ] `session-log-chunk.md` includes a verbatim `## Last Exchange` block (last user prompt + last assistant response)
+- [ ] `state.md` includes a `## Verify Block` and a `## Basis` fingerprint (HEAD, branch, changed_files, tests)
+- [ ] `index.md` exists with `okf_version`; each bundle `.md` carries OKF `type`+`timestamp` frontmatter (`python3 scripts/okf_bundle.py validate .handoff-fresh/current` → PASS)
 - [ ] `.git/info/exclude` contains `HANDOFF.md` and `.handoff-fresh/` by default (`--ignore-mode local`)
 
 ## Scenario 2: Edge case — no git repo (should-trigger, functional)
@@ -78,6 +81,14 @@
 **Then**
 - [ ] handoff-fresh does NOT activate
 - [ ] handoff activates instead
+
+## Scenario 8b: Should-NOT-trigger — resume an existing handoff
+
+**Given** a handoff or bundle already exists and the user wants to resume from it
+**When** user says "/pickup" or "pick up where we left off"
+**Then**
+- [ ] handoff-fresh does NOT activate (it is a producer, not a consumer)
+- [ ] pickup activates instead
 
 ## Scenario 9: Edge case — user prompt only says read handoff.md (should-trigger, functional)
 

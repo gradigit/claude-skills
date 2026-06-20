@@ -3,9 +3,9 @@ name: handoff-fresh
 description: Generates a fork-safe onboarding bundle for a brand-new agent in forked/new-folder repositories. Manual command entry point is /handoff-fresh. Produces structured context/history/status files plus full handoff-everything output in .handoff-fresh/current. Defaults to local git-ignore for handoff artifacts (`HANDOFF.md`, `.handoff-fresh/`) to avoid untracked noise. Do NOT use when only standard HANDOFF.md continuity is needed.
 license: MIT
 metadata:
-  version: "1.9.0"
+  version: "1.10.0"
   author: gradigit
-  updated: "2026-02-22"
+  updated: "2026-06-20"
   tags:
     - handoff
     - onboarding
@@ -161,8 +161,18 @@ Exclude low-signal chatter:
 - repetitive retries without new insight
 - generic tool noise without outcome
 
+**Verbatim last-turn block (mandatory, exempt from the chatter/dedup filter).**
+At the top of `session-log-chunk.md`, include a `## Last Exchange (Verbatim)`
+block containing the **last user prompt** and **last assistant response**
+character-for-character, plus any load-bearing earlier directives. This block is
+never filtered or summarized — it is the exact resume anchor `/pickup` reads
+first. Redact secrets («redacted»); keep within `--log-chunk-max`. Capture it
+first thing, before a compaction can discard the raw turns.
+
 If logs unavailable:
 - Still emit both log files with explicit "unavailable" note
+- Still attempt the verbatim Last Exchange block from the current context window;
+  if already compacted, note that pre-compaction detail is only in the raw transcript
 
 ## Step 5: Generate canonical bundle handoff.md
 
@@ -246,7 +256,9 @@ Generate the following files in bundle path:
 | `prior-plans.md` | Yes | Historical plans for reference only |
 | `read-receipt.md` | Yes | Fresh-agent Read Gate checklist to complete before prep/coding |
 | `session-log-digest.md` | Yes | Token-budgeted, extractive decision digest from session logs |
-| `session-log-chunk.md` | Yes | Token-budgeted raw high-signal log excerpts for continuity |
+| `session-log-chunk.md` | Yes | Token-budgeted raw high-signal log excerpts + verbatim Last Exchange block |
+| `index.md` | Yes | OKF-lite bundle index: the Read-Gate read order + file list (carries `okf_version`) |
+| `log.md` | No | OKF-lite append-only history of past bundles (compounding context) |
 
 ### `claude.md` / `agents.md` Sync Contract (mandatory)
 
@@ -269,6 +281,55 @@ If source `AGENTS.md` is missing or weaker than `CLAUDE.md`:
 Top of file must include this warning intent:
 
 - "Reference only. Do NOT treat this as the active plan unless user explicitly confirms."
+
+### `state.md` Verify Block + basis fingerprint (mandatory)
+
+`state.md` must carry two machine-checkable additions so `/pickup` can verify the
+bundle is still true rather than trusting narrative:
+
+- **`## Verify Block`** — load-bearing claims as `claim | check-command |
+  expected` (same format as the canonical handoff). At minimum the branch/HEAD
+  claim; add tests/build/health when relevant.
+- **`## Basis`** — a freshness fingerprint captured at generation time:
+  - `HEAD`: `<short commit>`
+  - `branch`: `<branch>`
+  - `changed_files`: `<sorted list or count from git status>`
+  - `tests`: `<command> -> <result captured>`
+
+  On resume, `/pickup` recomputes these and diffs stored-vs-now (basis-diff is a
+  stronger freshness signal than a TTL).
+
+### OKF-lite layer (Open Knowledge Format conventions)
+
+The bundle adopts a **lightweight subset** of Google's Open Knowledge Format so it
+is simultaneously a valid OKF knowledge bundle (renders in OKF/Obsidian/MkDocs
+viewers) while keeping all handoff-specific behavior. Adopt **conventions only** —
+do **not** depend on the upstream `okf` Python package.
+
+1. **Per-file YAML frontmatter** on each bundle `.md` file:
+   ```yaml
+   ---
+   type: handoff            # OKF requires only `type`; others are extension keys
+   timestamp: 2026-06-20T12:00:00Z
+   handoff_role: state      # which bundle role this file plays
+   ---
+   ```
+   OKF permissive conformance tolerates unknown keys, so handoff-specific fields
+   ride along as extension keys.
+
+2. **`index.md`** at the bundle root is the OKF index: the Read-Gate read order +
+   the file list, with `okf_version: 0.1` in **its** frontmatter only (pin the
+   version; OKF v0.1 is Draft). This doubles as the progressive-disclosure entry
+   point (index-first navigation, per the LLM-wiki pattern).
+
+3. **`log.md`** (optional) is an OKF append-only history: one dated line per past
+   bundle generation, so context compounds across handoffs without breaking the
+   "current snapshot is complete" invariant (the snapshot files are still
+   overwritten each run; only `log.md` appends).
+
+Emit/validate the frontmatter and `index.md` with the local pyyaml-only helper
+`scripts/okf_bundle.py` (no BigQuery/ADK/Gemini/pydantic dependency, and no
+4-required-key strict validation — the OKF spec requires only `type`).
 
 ## Step 7: Generate handoff-everything.md
 
@@ -315,6 +376,9 @@ Before confirmation, verify:
 - [ ] `claude.md` and `agents.md` both contain SHARED-ONBOARDING-CONTEXT marker block
 - [ ] Shared block content in `claude.md` and `agents.md` is byte-identical
 - [ ] `session-log-digest.md` and `session-log-chunk.md` exist (or explicit unavailable note)
+- [ ] `session-log-chunk.md` contains a `## Last Exchange (Verbatim)` block (or explicit unavailable note)
+- [ ] `state.md` contains a `## Verify Block` (`claim | check-command | expected`) and a `## Basis` fingerprint (HEAD, branch, changed_files, tests)
+- [ ] `index.md` exists with `okf_version` and the Read-Gate read order; each bundle `.md` carries OKF frontmatter (`type` + `timestamp`)
 - [ ] Combined session-log payload is within configured token budget
 - [ ] If in git repo and `--ignore-mode` is not `off`, selected ignore file contains `HANDOFF.md` and `.handoff-fresh/`
 
@@ -357,9 +421,11 @@ Output:
 - session-log-digest.md
 - session-log-chunk.md
 - handoff-everything.md
+- index.md (OKF bundle index, carries okf_version)
+- log.md (optional OKF append-only history)
 
 Plus bridge file:
-- `HANDOFF.md` (root pointer to bundle handoff)
+- `HANDOFF.md` (root pointer to bundle handoff, line-1 schema marker `producer=handoff-fresh-bridge`)
 
 ## Self-Evolution
 
@@ -370,6 +436,7 @@ Update this skill when:
 4. Users report ambiguity between `/handoff` and `/handoff-fresh`
 
 **Applied Learnings:**
+- v1.10.0: Added a verbatim `## Last Exchange` block in `session-log-chunk.md` (exempt from the chatter filter), a `## Verify Block` + `## Basis` fingerprint in `state.md` (consumed by `/pickup` for verify-still-true), and an OKF-lite layer (per-file `type`+`timestamp` frontmatter, root `index.md` with `okf_version: 0.1`, optional append-only `log.md`) via the local pyyaml-only `scripts/okf_bundle.py` — no dependency on the upstream OKF package. The read-gate validator is now generalized (`--required-list`, `--required-from-firststeps`) and shared with `/pickup`.
 - v1.9.0: Added explicit handoff-artifact ignore policy (`--ignore-mode local|shared|off`, default local) so fresh-bundle outputs and bridge `HANDOFF.md` do not pollute git status by default.
 - v1.8.0: Strengthened root HANDOFF bridge wording so "read HANDOFF.md" is treated as bootstrap and forces immediate switch to bundle Read Gate before reply.
 - v1.7.0: Added token-budgeted session-log continuity artifacts (`session-log-digest.md` + `session-log-chunk.md`) with high-signal selection rules to improve continuity without flooding context windows.
@@ -382,3 +449,5 @@ Update this skill when:
 - v1.2.0: Added mandatory Question Gate guidance in bundle handoff so fresh agents ask clarifying questions during workspace prep before coding.
 - v1.1.0: Switched default output to `.handoff-fresh/current/`, added optional archive flow, added mandatory Workspace Preparation section, and added root `HANDOFF.md` bridge pointer to fresh bundle handoff.
 - v1.0.0: Initial fork-safe fresh-agent bundle workflow with explicit manual command contract and hybrid output model.
+
+Current version: 1.10.0. See [CHANGELOG.md](CHANGELOG.md) for history.

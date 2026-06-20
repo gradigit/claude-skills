@@ -6,12 +6,13 @@
 **When** user says "/wrap"
 **Then**
 - [ ] Skill activates
+- [ ] Captures the verbatim last exchange first (step 0) before running sync
 - [ ] Runs syncing-docs (step 1)
 - [ ] Runs claude-md-improver (step 2)
 - [ ] Mirrors shared-context quality-critical updates into AGENTS.md (step 2 parity pass)
-- [ ] Runs handoff (step 3)
+- [ ] Runs handoff (step 3); resulting HANDOFF.md carries the Last Exchange + Verify Block sections
 - [ ] Shows combined summary with results from each step
-- [ ] Steps execute sequentially (sync → improve → handoff)
+- [ ] Steps execute sequentially (capture → sync → improve → handoff)
 
 ## Scenario 2: Edge case — wrap with --no-handoff (should-trigger, functional)
 

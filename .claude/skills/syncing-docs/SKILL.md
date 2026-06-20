@@ -68,10 +68,18 @@ This skill has two relationships with files: **owned** (can edit) and **watched*
 | .handoff-fresh/current/session-log-digest.md | Watched | handoff-fresh |
 | .handoff-fresh/current/session-log-chunk.md | Watched | handoff-fresh |
 | .handoff-fresh/current/handoff-everything.md | Watched | handoff-fresh |
+| .handoff-fresh/current/index.md | Watched | handoff-fresh |
+| .handoff-fresh/current/log.md | Watched | handoff-fresh |
 | architect/plan.md | Watched | forging-plans |
 | architect/prompt.md | Watched | forging-plans |
 
 **Rule: Never edit watched files.** Only report issues.
+
+> `/pickup` is the consumer of these watched handoff artifacts. It is non-mutating
+> and owns no files of its own, so syncing-docs tracks pickup only as awareness —
+> there is nothing for it to sync. When flagging a stale `HANDOFF.md` (last
+> modified > 10 commits ago), note that `/pickup` will surface the staleness on
+> the next resume via its verify-still-true gate.
 
 ## Step 1: Detect Project Context
 

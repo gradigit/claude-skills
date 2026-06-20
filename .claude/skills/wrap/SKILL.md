@@ -1,10 +1,11 @@
 ---
 name: wrap
-description: End-of-session coordinator that chains sync-docs, instruction-doc quality pass, and handoff into one command. Manual command entry point is /wrap. Optionally adds handoff-fresh bundle generation when explicitly requested.
+description: Coordinates the end of a session by chaining sync-docs, an instruction-doc quality pass (CLAUDE.md + AGENTS.md), and handoff into one /wrap command; optionally adds a handoff-fresh bundle. Captures the verbatim last exchange first so nothing is lost. Do NOT use for a bare handoff (use /handoff) or to resume/ingest a prior session (use /pickup).
 license: MIT
 metadata:
-  version: "1.3.0"
+  version: "1.4.0"
   author: gradigit
+  updated: "2026-06-20"
   tags:
     - session
     - workflow
@@ -21,6 +22,10 @@ metadata:
 
 Chains end-of-session skills into one command: sync docs, audit instruction docs quality (CLAUDE.md + AGENTS.md), and hand off.
 
+`/wrap` **closes** a session. Its consumer counterpart is **`/pickup`**, which
+**opens** the next one — it reads whatever `/wrap` (via `/handoff` /
+`/handoff-fresh`) wrote. Together they form a producer→consumer contract pair.
+
 ## Command Contract (Explicit, Manual)
 
 - Primary entry point: `/wrap`
@@ -31,11 +36,20 @@ Chains end-of-session skills into one command: sync docs, audit instruction docs
 ## Workflow
 
 ```
+- [ ] 0. Capture the verbatim last exchange FIRST (before sync/compaction can lose it)
 - [ ] 1. Run syncing-docs (full mode — drift fix + session learnings + cross-file checks)
 - [ ] 2. Run instruction-doc quality pass (CLAUDE.md improver + AGENTS parity mirror)
 - [ ] 3. Run handoff (commit, update docs, generate HANDOFF.md)
 - [ ] 4. Run handoff-fresh (optional, only if --with-fresh)
 ```
+
+## Step 0: Capture the Verbatim Last Exchange First
+
+Before running sync (which can be long enough for a context compaction to occur),
+capture the **last user prompt** and **last assistant response** verbatim into
+working notes, per the `/handoff` Step 0 contract. This guarantees the verbatim
+resume anchor survives into the handoff regardless of what happens during the
+later steps. Capture is manual — `/wrap` installs no auto-hooks.
 
 ## Arguments
 
@@ -65,10 +79,16 @@ Then mirror shared-context quality-critical updates into AGENTS.md:
 
 ## Step 3: Handoff
 
-Invoke the **handoff** skill:
+Invoke the **handoff** skill (v3.0.0):
 - Commit current work
-- Generate/update HANDOFF.md with session snapshot
+- Generate/update HANDOFF.md with session snapshot, including the mandatory
+  `## Last Exchange (Verbatim)` and machine-runnable `## Verify Block` sections
+  (and the line-1 schema marker) — these are what make the handoff consumable by
+  `/pickup`
 - Ready for /clear or session end
+
+To resume in the next session, the user runs **`/pickup`** (or "read HANDOFF.md",
+which routes to `/pickup`).
 
 ## Step 4: Fresh Bundle (Optional)
 
@@ -101,3 +121,12 @@ Update this skill when:
 2. **Ordering issue**: If a step should run before/after another, adjust sequence
 3. **Fresh-agent flow changes**: Update `--with-fresh` step and output contract
 4. **Instruction-doc drift**: If CLAUDE.md and AGENTS.md drift repeatedly, tighten parity pass in Step 2
+
+**Applied Learnings:**
+
+- v1.4.0: Added Step 0 (capture the verbatim last exchange first, before sync, so a compaction during later steps cannot lose it) and documented the wrap↔pickup producer→consumer contract pair. Step 3 now relies on handoff v3.0.0's mandatory Last Exchange + Verify Block sections that make the handoff consumable by `/pickup`.
+- v1.3.0: Step 2 expanded from a CLAUDE-only quality pass to an instruction-doc quality flow (CLAUDE.md improvements + AGENTS.md parity mirror).
+- v1.2.0: Updated `--with-fresh` to target the foldered handoff-fresh bundle path `.handoff-fresh/current/`.
+- v1.0.0: Initial end-of-session coordinator chaining sync-docs → claude-md-improver → handoff.
+
+Current version: 1.4.0. See [CHANGELOG.md](CHANGELOG.md) for history.

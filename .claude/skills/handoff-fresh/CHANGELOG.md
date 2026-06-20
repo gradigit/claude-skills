@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.10.0] - 2026-06-20
+
+### Added
+- Verbatim `## Last Exchange` block in `session-log-chunk.md` (last user prompt + last assistant response + load-bearing directives), exempt from the chatter/dedup filter — the resume anchor `/pickup` reads first
+- `## Verify Block` (`claim | check-command | expected`) and `## Basis` fingerprint (HEAD, branch, changed_files, tests) in `state.md`, so `/pickup` can verify the bundle is still true via basis-diff
+- OKF-lite layer: per-file YAML frontmatter (`type` + `timestamp` + handoff extension keys), a bundle-root `index.md` with `okf_version: 0.1`, and an optional append-only `log.md`. Emitted/validated by the local pyyaml-only `scripts/okf_bundle.py` (no dependency on the upstream OKF package; no 4-required-key strict validation — the spec requires only `type`)
+
+### Changed
+- `scripts/validate_read_gate.py` generalized with `--required-list` and `--required-from-firststeps` (shared with `/pickup`; bundle 5-file default unchanged)
+- Step 9 bundle validation checks the new verbatim block, Verify Block, Basis, and OKF frontmatter/index
+
 ## [1.9.0] - 2026-02-22
 
 ### Added
