@@ -73,3 +73,49 @@
 - [ ] FORGE-STATUS.md updates occur at every phase transition
 - [ ] FORGE-HANDOFF.md checkpoint writes stay under 3,000 output tokens total
 - [ ] Review agents run in fresh context (no builder history leakage)
+
+## Scenario 7: GATE E completion guard blocks false completion (should-trigger, functional)
+
+**Given** a milestone whose goal-reconciliation table has a criterion with no resolvable Code or a Test that does not exist in source
+**When** the orchestrator reaches GOAL RECONCILIATION and runs `hooks/forge_completion_guard.py`
+**Then**
+- [ ] The guard exits 1 (criterion lacks evidence) and the milestone does NOT proceed to COMPOUND
+- [ ] A completion/commit write of `state: FINALIZED` is blocked (Claude PreToolUse hook) absent a passing reconciliation
+- [ ] On Codex, the guard is run directly at GATE E (no hook) and exit 0 is required
+- [ ] A test named only in the reconciliation artifact does NOT count as existing (anti-Goodhart)
+- [ ] The escape hatch (`FORGE_GATE_OVERRIDE=1` / `--override`) is logged, never silent
+
+## Scenario 8: Spawn breaker enforces the circuit limits (should-trigger, functional)
+
+**Given** FORGE-STATUS.md counters at `spawns: 50`
+**When** the orchestrator runs `hooks/forge_spawn_breaker.py` before a spawn batch
+**Then**
+- [ ] The breaker exits 1 (STOP) and the orchestrator saves state, summarizes, and asks the user
+- [ ] The running `spawns/50` count is surfaced in the phase-transition write
+
+## Scenario 9: OKF artifact layer emitted + validated (should-trigger, functional)
+
+**Given** a completed milestone with FORGE-* artifacts and architect/** outputs
+**When** COMPOUND emits the OKF layer and FINALIZATION validates
+**Then**
+- [ ] Root artifacts are stamped with a `type` + `timestamp`; `index.md` carries `okf_version`
+- [ ] `okf_bundle.py validate . --recursive` passes (reserved index.md/log.md exempt)
+- [ ] `okf_bundle.py freshness . --recursive` flags any artifact stamped before the repo's current state
+- [ ] FORGE-MEMORY.md is treated as the canonical append-only OKF log
+
+## Scenario 10: Directive vs inquiry intake routing (should-trigger, functional)
+
+**Given** the goal "research caching strategies" (an inquiry)
+**When** intake classifies the goal
+**Then**
+- [ ] The run does NOT enter the milestone build loop; forge-research runs to completion and stops
+- [ ] A directive ("build the cache layer") DOES enter the milestone loop
+
+## Scenario 11: Codex role selection via prompt-template (should-trigger, functional)
+
+**Given** the orchestrator running on Codex CLI (spawn_agent only resolves built-in agent_types)
+**When** it spawns a review/build sub-agent
+**Then**
+- [ ] It selects a built-in `agent_type` (explorer/worker) and injects the forge role's quality bar + 7-tag template into `message`
+- [ ] On Claude Code it selects the forge role by name via `subagent_type`
+- [ ] A 429 is treated as transient (backoff, not counted to the 2-retry budget; no blind re-spawn)

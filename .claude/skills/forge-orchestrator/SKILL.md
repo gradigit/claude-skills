@@ -3,7 +3,7 @@ name: forge-orchestrator
 description: "Master orchestrator that sequences forge-research and forge-builder through milestone-gated cycles with adversarial review, testing, brainstorming, and compound learning. Designed for long-running autonomous sessions. Invoke with /forge [goal]. Do NOT use for single research questions (use forge-research) or simple builds (use forge-builder)."
 license: MIT
 metadata:
-  version: "1.4.0"
+  version: "1.5.0"
   author: gradigit
   category: forge
   tags:
@@ -499,4 +499,4 @@ Never retry a crashed agent — spawn fresh. Never `send_input` to a failed agen
 
 ## Self-Evolution
 
-Version 1.4.0. See CHANGELOG.md.
+Version 1.5.0. See CHANGELOG.md.

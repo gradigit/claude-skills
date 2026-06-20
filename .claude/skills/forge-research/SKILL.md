@@ -3,7 +3,7 @@ name: forge-research
 description: "Launches autonomous multi-agent research campaigns with hypothesis tracking, source verification, adversarial challenge, and iterative deepening. Can be used standalone or orchestrated by forge-orchestrator. Invoke with /forge-research [topic]. Do NOT use for building/coding — use forge-builder instead."
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   author: gradigit
   category: forge
   tags:
@@ -407,4 +407,4 @@ Update this skill when:
 4. **Quality misses**: Low-quality findings slip through — tighten standards or add adversarial checks
 5. **User corrections**: Real-world usage reveals incorrect guidance
 
-Current version: 1.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.2.0. See [CHANGELOG.md](CHANGELOG.md) for history.

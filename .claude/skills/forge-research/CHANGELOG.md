@@ -2,6 +2,11 @@
 
 All notable changes to the forge-research skill.
 
+## [1.2.0] - 2026-06-21
+
+### Added
+- Inline Codex turn keep-alive at synthesis: after writing a findings file, read it back (a tool call) to start the next depth cycle rather than ending on a text-only response (which ends the Codex turn).
+
 ## [1.1.0] - 2026-03-03
 
 ### Changed

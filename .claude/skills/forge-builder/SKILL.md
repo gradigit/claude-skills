@@ -3,7 +3,7 @@ name: forge-builder
 description: "Autonomous building/coding skill with self-review, self-improvement, and quality validation loops. Classifies input as directive (build) or inquiry (analyze). Can be used standalone or orchestrated by forge-orchestrator. Invoke with /forge-builder [task]. Do NOT use for research — use forge-research instead."
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   author: gradigit
   category: forge
   tags:
@@ -297,4 +297,4 @@ Update this skill when:
 3. **Build workflow changes**: new phases, reordered phases, or phases that should be skipped
 4. **Platform API changes**: new isolation mechanisms, new checkpointing features
 
-Current version: 1.2.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.3.0. See [CHANGELOG.md](CHANGELOG.md) for history.

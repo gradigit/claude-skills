@@ -3,7 +3,7 @@ name: forge-codex-multiagent
 description: "Codifies best practices for Codex CLI multi-agent features: spawn_agent, fork_context, send_input, batch processing. Reference guide for building effective agent workflows with conflict prevention and error recovery. Do NOT use when working with Claude Code — use forge-claude-teams instead."
 license: MIT
 metadata:
-  version: "1.1.1"
+  version: "1.2.0"
   author: gradigit
   category: forge
   tags:
@@ -581,4 +581,4 @@ Update this skill when:
 3. **Conflict strategies**: Better isolation or merging approaches discovered
 4. **User corrections**: Real-world usage reveals incorrect guidance
 
-Current version: 1.1.1. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.2.0. See [CHANGELOG.md](CHANGELOG.md) for history.
