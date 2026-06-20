@@ -82,4 +82,4 @@ Preventive hardening based on forge-research production eval (C+ grade — skipp
 - Reference files: state-templates.md, steering-templates.md, milestone-template.md, claude-md-sections.md, compaction-protocol.md, sub-agent-template.md
 
 ### Context
-Layer 2 orchestrator skill — sequences forge-research and forge-builder through milestone-gated cycles. References Layer 0 practices (forge-claude-teams or forge-codex-multiagent) and Layer 1 capabilities. Bundles 4 custom agent definitions in agents/ directory.
+Layer 2 orchestrator skill — sequences forge-research and forge-builder through milestone-gated cycles. References Layer 0 practices (forge-claude-teams or forge-codex-multiagent) and Layer 1 capabilities. The 4 custom agent definitions live in the repo's top-level `.claude/agents/` (and `.codex/agents/` for Codex) — installed by install.sh.

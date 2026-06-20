@@ -291,4 +291,4 @@ Update this skill when:
 3. **Build workflow changes**: new phases, reordered phases, or phases that should be skipped
 4. **Platform API changes**: new isolation mechanisms, new checkpointing features
 
-Current version: 1.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.2.0. See [CHANGELOG.md](CHANGELOG.md) for history.

@@ -71,13 +71,13 @@ send_input(agent_id, "Focus on the token refresh logic in auth.ts lines 45-80")
 
 > **Verify**: Confirm `send_input` accepts `agent_id` and `message` string.
 
-### wait / resume_agent
+### wait_agent / resume_agent
 
 Synchronous wait blocks until agent completes or timeout elapses. Resume restarts a suspended agent.
 
 ```python
-result = wait(agent_id, timeout=300)    # Wait up to 5 minutes
-resume_agent(agent_id)                  # Resume suspended agent
+result = wait_agent(agent_id, timeout=300)    # Wait up to 5 minutes
+resume_agent(agent_id)                        # Resume suspended agent
 ```
 
 **Timeout guidelines:**
@@ -89,7 +89,7 @@ resume_agent(agent_id)                  # Resume suspended agent
 | Multi-file research | 300s |
 | Complex refactoring | 600s |
 
-> **Verify**: Confirm `wait` accepts optional `timeout` (seconds) and `resume_agent` exists.
+> **Verify**: Confirm `wait_agent` accepts optional `timeout` (seconds) and `resume_agent` exists. (The live binary uses `wait_agent`, not bare `wait`.)
 
 ### close_agent
 
@@ -372,8 +372,8 @@ Agents print signals to stdout. Orchestrator monitors and reacts.
 2. close_agent(failed_id)           # Collect whatever output exists
 3. Analyze failure cause
 4. spawn_agent(                     # Fresh agent, never reuse failed one
-       name="retry-{task}",
-       instructions="""
+       agent_type="worker",
+       message="""
            {original 5-component handoff}
 
            Previous attempt failed: {failure reason}
@@ -505,7 +505,7 @@ you into the next step and keeps the turn alive.
 ```
 CREATE:    agent_id = spawn_agent(agent_type, message, [model], [fork_context])
 SEND:      send_input(agent_id, message)          # running agents only
-WAIT:      result = wait(agent_id, [timeout])      # synchronous block
+WAIT:      result = wait_agent(agent_id, [timeout]) # synchronous block
 RESUME:    resume_agent(agent_id)                   # restart suspended
 CLOSE:     output = close_agent(agent_id)           # graceful + collect
 FORK:      fork_id = fork_context(instructions)     # clone context
