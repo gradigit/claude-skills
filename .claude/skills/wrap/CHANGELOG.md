@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.5.0] - 2026-06-20
+
+### Added
+- "Choosing the artifact shape" guidance (Step 4): when to use `--with-fresh` (the
+  bundle) vs the default single canonical `HANDOFF.md`, so the shape is a deliberate
+  choice rather than an accident of which flag was typed.
+- Final summary now states the artifact shape produced and that `/pickup` consumes it;
+  a coexisting older bundle is explicitly marked historical.
+
+### Why
+Closes gap NEW-B (producer shape depends on which command ran) surfaced by the session
+audit and the P2 fixture probe.
+
 ## [1.4.0] - 2026-06-20
 
 ### Added

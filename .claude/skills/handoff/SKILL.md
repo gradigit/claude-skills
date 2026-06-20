@@ -3,7 +3,7 @@ name: handoff
 description: Creates context handoff files that preserve session state for seamless continuation after /clear. Manual command entry point is /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions. Defaults to local git-ignore for handoff artifacts so they do not pollute working tree status. Use handoff-fresh for brand-new/forked-repo onboarding bundles.
 license: MIT
 metadata:
-  version: "3.0.0"
+  version: "3.1.1"
   author: gradigit
   updated: "2026-06-20"
   tags:
@@ -185,7 +185,17 @@ Every generated `HANDOFF.md` must include, and they must be non-empty (or marked
 - **`## Verify Block`** (after Reference Files): the load-bearing claims a
   resuming agent must not trust blindly, each as `claim | check-command |
   expected`. `/pickup` runs these on resume. Always include branch/HEAD; add
-  test/health/build checks when the work depends on them.
+  test/health/build checks when the work depends on them. **Each command must
+  actually validate its full claim** — use `git branch --show-current` for a
+  branch-name claim (not `git rev-parse --short HEAD`, which returns only the hash);
+  if a check can't run in this directory, mark its expected cell `unverifiable here`.
+
+**Mark unverified results at the point of claim.** A result you did not run *this
+session* (test counts, build/health status) must be labeled `(per session notes —
+unverified)` wherever it appears in prose — "What Was Done", "Current State" — not
+only inside the Verify Block. Never write "Verified: 42 passing" for a figure you are
+merely carrying forward; that is the producer-side form of the fabricated-PASS failure
+`/pickup` guards against. State what you actually ran, and mark the rest unverified.
 
 ### Branching Instructions Pattern
 
@@ -218,6 +228,25 @@ If HANDOFF.md already exists:
 
 Each handoff is a **complete snapshot** — never append.
 
+### Resume-artifact precedence & cleanup
+
+Repos accumulate competing resume artifacts — old dated `FORGE-HANDOFF.*`,
+`FORGE-STATUS.*`, `MERGE-READINESS-*`, a stale `.handoff-fresh/`, prior dated
+`HANDOFF-*.md` stubs. With no precedence rule the next agent (or `/pickup`) can
+resume from the wrong one. Make this handoff unambiguously authoritative:
+
+1. **Detect coexisting artifacts.** Scan the repo root (and worktrees) for
+   `*HANDOFF*`, `FORGE-*`, and `.handoff-fresh/`.
+2. **Emit a precedence header.** Immediately under the schema marker, when other
+   resume artifacts exist, add:
+   `> AUTHORITATIVE handoff — supersedes: FORGE-HANDOFF.2026-04-28.md, FORGE-STATUS.md, .handoff-fresh/ (stale).`
+   naming the specific stale artifacts this file replaces. If none coexist, omit.
+3. **Write to the one canonical path.** Overwrite `HANDOFF.md` — never create a new
+   dated stub (`HANDOFF-2026-06-20.md`), which is exactly what creates the sprawl.
+4. **Recommend cleanup (do not auto-delete).** In the confirmation output, list the
+   dead artifacts and suggest archiving/removing them. Deletion needs explicit user
+   confirmation — surface it, don't perform it.
+
 ## Step 6: Validate and Confirm
 
 Before confirming, verify:
@@ -230,6 +259,7 @@ Before confirming, verify:
 - [ ] If both CLAUDE.md and AGENTS.md exist, shared project context is not contradictory
 - [ ] HANDOFF.md includes bootstrap read rule and no-interim-summary first-response contract
 - [ ] If in git repo and `--ignore-mode` is not `off`, selected ignore file contains `HANDOFF.md` and `.handoff-fresh/`
+- [ ] If competing resume artifacts exist (`FORGE-*`, dated stubs, stale `.handoff-fresh/`), a precedence header naming the superseded ones is present, and the confirmation lists them for cleanup
 
 **Content completeness** (each present and non-empty, or explicitly `N/A — <reason>`):
 
@@ -373,6 +403,8 @@ Last commit: abc1234 — WIP: JWT auth middleware with refresh token rotation
 | Placeholder text left in template | Check for unfilled `{...}` tokens |
 | Appending to old HANDOFF.md | Always overwrite — each handoff is a complete snapshot |
 | Handoff without noting uncommitted work | If skipping commit, list uncommitted files in handoff |
+| New dated stub (`HANDOFF-<date>.md`) alongside the old one | Write the one canonical `HANDOFF.md`; that sprawl is what confuses the next resume |
+| Stale `FORGE-*`/old artifacts left unmarked | Emit a precedence header naming them superseded; recommend cleanup |
 
 ## Self-Evolution
 
@@ -385,6 +417,18 @@ Update this skill when:
 
 **Applied Learnings:**
 
+- v3.1.1: **Verify-honesty at the point of claim** (after-eval regression). Note-sourced
+  results (test counts, build/health) must be labeled `(per session notes — unverified)`
+  in prose, not only in the Verify Block — the producer-side form of `/pickup`'s
+  anti-fabrication rule. Each Verify Block command must validate its *full* claim
+  (`git branch --show-current` for branch names; mark in-dir-unrunnable checks).
+- v3.1.0: **Resume-artifact precedence & cleanup** (gap NEW-A/#6 from the A/B eval).
+  When competing artifacts coexist (`FORGE-*`, dated stubs, stale `.handoff-fresh/`),
+  the generated handoff now emits an `> AUTHORITATIVE — supersedes: …` header naming
+  them, writes only the one canonical `HANDOFF.md` (never a new dated stub), and the
+  confirmation recommends archiving the dead ones (no auto-delete). Closes the
+  divergent-artifact-with-no-precedence-rule failure observed in real logs and the
+  fixture eval (P3).
 - v3.0.0: Schema v3 — mandatory line-1 `<!-- HANDOFF-SCHEMA -->` marker, a verbatim `## Last Exchange` section (last user prompt + last assistant response + load-bearing directives, captured first in Step 0 so compaction can't strip them), and a machine-runnable `## Verify Block` (claim | check | expected) consumed by the new `/pickup` skill. Added content-completeness assertions and a full-overwrite finalize rule (fixes the 47B-vs-12KB stub inconsistency). Standardizes the verbatim-capture workaround users were forcing manually. **Breaking**: old/hand-written HANDOFF.md files lack the marker — `/pickup` still handles them but flags a weak contract.
 - v2.5.0: Added handoff-artifact ignore policy (`--ignore-mode local|shared|off`, default local) so `HANDOFF.md` and `.handoff-fresh/` do not show up as noisy untracked files.
 - v2.4.0: Added mandatory bootstrap read rule in HANDOFF.md so "read handoff.md" prompts automatically trigger full First Steps reading before reply.
@@ -394,4 +438,4 @@ Update this skill when:
 - v2.0.0: Renamed from handing-off. Fixed frontmatter. Added edge case handling, pitfalls table, git ops table, validation step, concrete example. Extracted templates to templates.md.
 - v1.0.0: Initial version based on forging-plans handoff pattern and external best practices
 
-Current version: 3.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 3.1.1. See [CHANGELOG.md](CHANGELOG.md) for history.

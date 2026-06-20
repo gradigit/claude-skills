@@ -3,7 +3,7 @@ name: pickup
 description: The consumer counterpart to handoff/handoff-fresh/wrap. Picks up what was handed off AND where work left off. Manual command entry point is /pickup. Producer-agnostic — detects whichever artifact was written (bundle, canonical HANDOFF.md, or FORGE/CLAUDE pointers), reads the full First-Steps set with enforced receipts, replays the verbatim last exchange, and runs a stakes-tiered verify-still-true gate before acting. Routes the bare "read HANDOFF.md" path here so the default gets the strong behavior. Do NOT use to WRITE a handoff — use handoff/wrap for that.
 license: MIT
 metadata:
-  version: "1.0.0"
+  version: "1.1.1"
   author: gradigit
   updated: "2026-06-20"
   tags:
@@ -105,6 +105,22 @@ timestamp (e.g. CLAUDE.md points at a March `FORGE-*` set while `HANDOFF.md` is
 from June), pick the freshest and explicitly list the others as historical in the
 output drift flags — never silently merge them.
 
+**Search sibling worktrees, not just the cwd.** The live handoff is often in a
+different worktree than the one you started in — a recurring real-world miss is a
+*stale* root `HANDOFF.md` while the active one lives in `worktrees/<feature>/` or a
+sibling checkout. Before choosing, enumerate `HANDOFF.md` / `.handoff-fresh/` across
+the repo's worktrees (`git worktree list`, then search each) or a bounded
+`find . -name HANDOFF.md`. Pick the freshest match whose content matches the user's
+stated intent (e.g. "the auth work" → the worktree handoff about auth), and list the
+others as historical.
+
+**Establish direction-of-drift before calling anything stale.** A freshness verdict
+needs evidence of *which side is older*, not merely that two sources disagree.
+Gather: the embedded date headers compared side by side, file mtimes, and
+`git log -1` on the conflicting files; bound staleness by comparing the handoff's
+date to today. If no timestamps are recoverable, mark freshness **`unknown`** —
+never assert **`stale`** from content-disagreement alone.
+
 ## Step 2: Section-select within the chosen artifact
 
 A long-lived `HANDOFF.md` can accumulate multiple eras (more than one "First
@@ -131,6 +147,13 @@ must be the per-file read receipt — one line per file:
 Do **not** send interim one-file acknowledgements ("read HANDOFF.md, here's a
 summary"). No partial reads. See [templates.md](templates.md) for the receipt
 format.
+
+**Anchor read-all to the chosen artifact's OWN directive.** Treat the live
+artifact's bootstrap line and its "First Steps (Read in Order)" as the authority for
+*what* to read and in *what order* — quote that directive when you receipt, so you
+demonstrate obeying the authoritative handoff rather than inferring the read-all from
+this skill's routing. Follow the artifact's stated order (e.g. `../../README.md` then
+`src/auth/session.py`), not an order of your own.
 
 ## Step 4: Validate the receipt (deterministic)
 
@@ -169,9 +192,13 @@ prior intent that a synthesis can lose. Distinguish **synthesis** (paraphrased
 state, for fast orientation) from **evidence** (the verbatim exchange, for
 zero-loss resume) and trust the evidence for the precise next move.
 
-If the artifact has **no** verbatim section (old/hand-written), flag
-"no verbatim exchange captured" as a drift item and fall back to the synthesis
-plus a freshness rebuild — do not silently assume continuity.
+If the artifact has **no** verbatim section (old/hand-written), record it as a
+**single** weak-contract line ("weak contract: hand-written, no verbatim/marker/verify
+block") and fall back to the synthesis plus a freshness rebuild — do not silently
+assume continuity. Do **not** expand a hand-written file's missing v3 scaffolding into
+a multi-item blockers list; a missing marker/section is a contract note, **not** a
+defect of the work. Reserve the repair offer (Step 7) for handoffs whose *claims are
+false/stale*, not merely unmarked.
 
 **Redaction + budget on replay** (consumer-side safety): the producer redacts at
 write time, but old/hand-written handoffs never had a redaction pass. When
@@ -217,6 +244,15 @@ hold:
 `--stakes low|high` overrides this. When the signals are ambiguous, prefer
 blocking. Report PASS / drift per check.
 
+**Never fabricate a verification.** Report a check as `PASS` / `current` / "clean"
+**only** if you actually ran it this turn and can quote its output. If you did not
+run a check — no shell, skipped it, or only inferred it — label that line
+**`assumed (unverified)`**. Do not state environment facts like "not a git repo",
+"working tree clean", "HEAD matches", or "tests green" as *verified* when no command
+produced that result. A fabricated PASS is worse than an honest "unverified": the
+next agent trusts it. This is the inverse of acting-on-stale — here the danger is
+inventing the verification itself.
+
 > Why this exists: in a real resume on a live trading-signal system, the agent
 > read two files, declared the system healthy, and did zero verification until the
 > user had to interject "check current health before you rearm the monitor." The
@@ -225,7 +261,18 @@ blocking. Report PASS / drift per check.
 ## Step 7: Reconcile and surface open decisions
 
 - Reconcile the handoff's claims against current `git` / `TODO.md` / live state;
-  list mismatches as drift.
+  list mismatches as drift. Reconciliation includes **factual content claims** the
+  handoff asserts about files (counts, config values, test results, "0 items left"):
+  open the referenced file and compare — do not pass these through unchecked.
+- **Commit to the designated next action.** If the handoff (its summary or verbatim
+  Last Exchange) already names the next step, adopt it as the resume target — do not
+  end with a redundant "Want me to proceed?" round-trip. Ask only the ONE genuinely
+  blocking decision, and never bundle a blocking question with a proceed-confirmation.
+- **Offer to repair a chosen-but-stale handoff.** When the authoritative handoff
+  *itself* carries now-false claims (drift caught in Step 6), surface a concrete
+  remediation — "re-run `/handoff` to correct these lines before the next `/clear` so
+  the false claims don't re-mislead" — naming the specific lines. Stay non-mutating:
+  offer, don't auto-edit.
 - **Surface the handoff's open decisions/questions back to the user.** Use
   `ask-question` **only if genuinely blocked** — never to re-ask something the
   handoff already answered (a recurring failure: agents asking the user to
@@ -245,8 +292,9 @@ PASS/drift report (Step 6). Then always return these five items:
 4. **Fallback path used** — "none — handoff found" or which detection rung / era
    was used.
 5. **Blockers / drift flags** — failed verify checks, missing First-Steps files,
-   timestamp divergence, "no verbatim captured", plus any open decisions surfaced
-   to the user.
+   timestamp divergence, plus any open decisions surfaced to the user. A
+   hand-written file's missing v3 scaffolding (marker / Last Exchange / Verify Block)
+   is **one** weak-contract line here, never a per-section findings list.
 
 See [templates.md](templates.md) for the output template.
 
@@ -266,6 +314,15 @@ NEVER:
 - Assume "newest file == current truth" without the freshness check
 - Skip the rebuild/flag when the artifact is stale
 - Re-ask the user for context the handoff already contains
+- **Report an un-run check as verified** — label it `assumed (unverified)` instead
+- **Over-report on a minimal/hand-written artifact.** The weak-contract flag is a
+  one-line internal note, not a graded critique. Do not enumerate the v3 sections a
+  hand-written file "should" have as if they were findings, and do not narrate
+  skill-internal routing/tiering ("blocking-tier intent", "schema-marker drift") as
+  if it were session state. Keep output to grounded state + the next action.
+- **Route the next session to a non-First-Steps file** — never tell it to read an
+  oracle / ground-truth / scratch file that the chosen artifact's First Steps did
+  not list.
 
 ## Reused Components
 
@@ -296,6 +353,21 @@ Update this skill when:
 4. **The handoff contract changes** — keep the schema-marker and Verify-Block parsing in sync
 
 **Applied Learnings:**
+- v1.1.1: Closed the residual over-ceremony case the after-eval still caught (C1): Step 5
+  and the Step 8 blockers contract no longer instruct flagging a hand-written file's
+  missing v3 scaffolding as drift items — it is one weak-contract line, and the repair
+  offer is reserved for false/stale *claims*, not unmarked files.
+- v1.1.0: Hardened against failure modes surfaced by an A/B fixture eval. (1) **Never
+  fabricate a verification** — un-run checks must be labeled `assumed (unverified)`,
+  not reported as PASS (fixed agents asserting "not a git repo"/"tree clean" with no
+  command run). (2) **Worktree-aware detection** — enumerate sibling worktrees so a
+  stale root `HANDOFF.md` no longer hides the live one. (3) **Direction-of-drift**
+  required before a `stale` verdict; `unknown` when no timestamps. (4) Anchor read-all
+  + order to the chosen artifact's own bootstrap/First-Steps text. (5) Commit to the
+  handoff's designated next action instead of a redundant "proceed?" round-trip;
+  reconcile factual content claims; offer to repair a chosen-but-stale handoff. (6)
+  Stop over-reporting on minimal/hand-written artifacts and never route the next
+  session to a non-First-Steps oracle file.
 - v1.0.0: Initial consumer skill. Producer-agnostic detection (bundle / canonical / FORGE-CLAUDE), skill-owned read-all+receipt guarantee, verbatim-first resume, stakes-tiered verify-still-true gate, and the 5-item resume contract. Generalized the handoff-fresh read-gate validator to the canonical path. Grounded in a session-log eval of real resumes and the swarm-research-droid feedback report.
 
-Current version: 1.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.1.1. See [CHANGELOG.md](CHANGELOG.md) for history.

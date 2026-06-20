@@ -5,6 +5,33 @@ All notable changes to this skill will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-06-20
+
+### Fixed
+- **Verify-honesty at the point of claim** (after-eval regression): note-sourced
+  results (test counts, build/health) must be labeled `(per session notes — unverified)`
+  in prose ("What Was Done" / "Current State"), not only inside the Verify Block — the
+  producer-side counterpart to `/pickup`'s anti-fabrication rule.
+- Verify Block commands must validate the *full* claim: `git branch --show-current` for
+  branch-name claims (not `git rev-parse --short HEAD`); in-dir-unrunnable checks marked
+  `unverifiable here`.
+
+## [3.1.0] - 2026-06-20
+
+### Added
+- **Resume-artifact precedence & cleanup** (Step 5): when competing artifacts coexist
+  (`FORGE-HANDOFF.*`, `FORGE-STATUS.*`, `MERGE-READINESS-*`, stale `.handoff-fresh/`,
+  dated `HANDOFF-*` stubs), the generated `HANDOFF.md` emits an
+  `> AUTHORITATIVE — supersedes: …` header naming the stale ones, and the confirmation
+  recommends archiving them (no auto-delete).
+- Validation checklist item + Common Pitfalls rows for precedence header and
+  "never write a new dated stub" (write the one canonical `HANDOFF.md`).
+
+### Why
+Closes gap NEW-A (artifact sprawl / no precedence rule) and part of #6 (divergent
+artifacts), both confirmed in the session-log audit and the P3 fixture eval where
+neither pre-v3 nor v3 flagged or superseded the dead `FORGE-*` files.
+
 ## [3.0.0] - 2026-06-20
 
 ### Added

@@ -3,7 +3,7 @@ name: wrap
 description: Coordinates the end of a session by chaining sync-docs, an instruction-doc quality pass (CLAUDE.md + AGENTS.md), and handoff into one /wrap command; optionally adds a handoff-fresh bundle. Captures the verbatim last exchange first so nothing is lost. Do NOT use for a bare handoff (use /handoff) or to resume/ingest a prior session (use /pickup).
 license: MIT
 metadata:
-  version: "1.4.0"
+  version: "1.5.0"
   author: gradigit
   updated: "2026-06-20"
   tags:
@@ -98,6 +98,23 @@ Only when user explicitly passes `--with-fresh`:
 - Generate fresh-agent onboarding files in `.handoff-fresh/current/`
 - Report bundle output paths in final summary
 
+### Choosing the artifact shape (avoid silent inconsistency)
+
+The output shape must be a deliberate choice, not an accident of which flag was
+typed. Default `/wrap` writes the single canonical `HANDOFF.md` — correct for
+same-repo continuity. Recommend `--with-fresh` (the multi-file bundle) when the next
+agent is **fork/clone/fresh-onboarding** (new worktree, handed to a teammate, or a
+cold start with no prior context).
+
+- **Always state the shape** in the final summary: which artifact was written
+  (`HANDOFF.md` vs `.handoff-fresh/` bundle) and that `/pickup` consumes it.
+- If a `.handoff-fresh/` bundle already exists but you wrote only the canonical
+  `HANDOFF.md` this run, say so — the now-older bundle is historical (handoff's
+  precedence header + `/pickup`'s freshness check keep the next resume from following
+  the stale bundle).
+- Never leave both a fresh single-file handoff and an older bundle with no note of
+  which is authoritative.
+
 ## Example
 
 ```
@@ -111,6 +128,7 @@ Runs sync-docs → claude-md-improver → handoff sequentially. Each step shows 
   Sync: 4 drift fixes (CLAUDE.md + AGENTS.md), 1 learning captured, 2 cross-file issues flagged
   Quality: CLAUDE.md scored B (78/100), 2 improvements applied, AGENTS.md parity mirrored
   Handoff: Committed (abc1234), HANDOFF.md updated
+  Artifact shape: single canonical HANDOFF.md (no bundle) — /pickup will consume it
   Fresh: (omitted unless --with-fresh)
 ```
 
@@ -124,9 +142,15 @@ Update this skill when:
 
 **Applied Learnings:**
 
+- v1.5.0: **Artifact-shape discipline** (gap NEW-B from the A/B eval). Made the
+  single-file-vs-bundle choice deliberate and self-described: guidance on when to add
+  `--with-fresh`, the final summary always states which artifact was written and that
+  `/pickup` consumes it, and a coexisting older bundle is explicitly marked historical
+  (backed by handoff's new precedence header). Fixes the silent "shape depends on which
+  flag was typed" inconsistency.
 - v1.4.0: Added Step 0 (capture the verbatim last exchange first, before sync, so a compaction during later steps cannot lose it) and documented the wrap↔pickup producer→consumer contract pair. Step 3 now relies on handoff v3.0.0's mandatory Last Exchange + Verify Block sections that make the handoff consumable by `/pickup`.
 - v1.3.0: Step 2 expanded from a CLAUDE-only quality pass to an instruction-doc quality flow (CLAUDE.md improvements + AGENTS.md parity mirror).
 - v1.2.0: Updated `--with-fresh` to target the foldered handoff-fresh bundle path `.handoff-fresh/current/`.
 - v1.0.0: Initial end-of-session coordinator chaining sync-docs → claude-md-improver → handoff.
 
-Current version: 1.4.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.5.0. See [CHANGELOG.md](CHANGELOG.md) for history.
