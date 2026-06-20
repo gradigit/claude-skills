@@ -11,9 +11,13 @@ Templates for the three primary state files maintained by the forge orchestrator
 milestone: {N}
 phase: {research|planning|build|review|second-opinion|improvement|gate|compound}
 updated: {ISO timestamp}
+spawns: {cumulative sub-agent/spawn_agent count this run}
+milestones: {milestones STARTED this run}
+state: {running|FINALIZED}
 ---
 ## Current State
 Milestone {N} ({name}), Phase: {phase}. {N} of {total} tasks complete.
+Spawns: {spawns}/50. Milestones: {milestones}/10.
 Blocked on: {or "nothing"}.
 Next action: {what to do next}.
 
@@ -36,6 +40,45 @@ Next action: {what to do next}.
 **Write ownership**: Only the orchestrator (main thread) writes FORGE-STATUS.md. Sub-agents report status inline to the orchestrator.
 
 **Update frequency**: Every phase transition within every milestone.
+
+**Counters (circuit breaker)**: Increment `spawns` on every sub-agent spawn and
+`milestones` when a new milestone starts. Before each spawn batch / new milestone,
+run `python3 hooks/forge_spawn_breaker.py FORGE-STATUS.md` — exit 1 means STOP
+(save state, summarize, ask the user). This makes the documented 50-spawn /
+10-milestone breakers behavioral instead of advisory.
+
+**Completion ledger**: `state` stays `running` until Finalization, which sets
+`state: FINALIZED`. This single parseable line is the source of truth for
+"run complete" — distinct from a turn ending. The completion guard (below) blocks
+any write of `state: FINALIZED` (or a milestone marked completed) until GATE E
+evidence exists.
+
+---
+
+## Goal-Reconciliation Artifact (GATE E)
+
+Written to `architect/review-findings/{milestone}-goal-reconciliation.md` during
+the GOAL RECONCILIATION GATE. Format the completion guard parses:
+
+```markdown
+# {Milestone} Goal Reconciliation
+
+| Criterion | Code | Test | Status |
+|-----------|------|------|--------|
+| {acceptance criterion, verbatim from the milestone spec} | {file:line where implemented} | {named test that exists AND was run} | verified |
+```
+
+Rules the guard enforces (`hooks/forge_completion_guard.py`):
+- Every acceptance criterion is a row; no placeholders (`-`, `TBD`, `{...}`).
+- `Code` must resolve to a real `file:line` in the repo.
+- `Test` must be a test that actually exists in source (not just named here — the
+  guard excludes the forge artifacts from its search so writing the name is not enough).
+- `Status` must be `verified` (the test was run and passed).
+
+Run before COMPOUND/FINALIZATION: `python3 hooks/forge_completion_guard.py
+architect/review-findings/{milestone}-goal-reconciliation.md --repo-root .` —
+exit 0 is required to proceed. Escape hatch for genuine parser edge cases:
+`--override "<reason>"` (logged loudly; justify in FORGE-MEMORY.md).
 
 ---
 

@@ -74,7 +74,7 @@ h. Write initial plan to TODO.md
 i. Add forge sections to CLAUDE.md (see [claude-md-sections.md](claude-md-sections.md))
 j. Add forge artifacts to .git/info/exclude: `FORGE-STATUS.md`, `FORGE-HANDOFF.md`, `FORGE-MEMORY.md`, `HUMAN-INPUT.md`, `MISSION-CONTROL.md`, `SUGGESTIONS.md`, `DEFERRED-CHANGES.md`, `architect/agent-contexts/`, `architect/review-findings/`, `.claude/forge-scopes.json`
 k. Create `.claude/forge-scopes.json` with empty agents map: `{"agents": {}}`
-l. Install scope guard hook: copy `.claude/skills/forge-orchestrator/hooks/forge-scope-guard.sh` to `.claude/hooks/forge-scope-guard.sh`, make executable, and add PreToolUse hook entry to `.claude/settings.local.json` (see Scope Guard Installation below)
+l. Install the guard hooks + checkers (scope guard, completion guard, spawn breaker) into `.claude/hooks/` and register the PreToolUse entries in `.claude/settings.local.json` (see Guard Installation below). Initialize FORGE-STATUS.md counters `spawns: 0`, `milestones: 0`, `state: running`.
 
 > **GATE A checkpoint**: Do not proceed to Step 2 unless you have (1) parsed the goal into milestones written to TODO.md, (2) read the platform practices guide, and (3) created all steering file templates. If any of these are missing, go back now.
 
@@ -181,11 +181,24 @@ Before codifying learnings, verify that what was built actually matches what was
    - **Runtime evidence** (if applicable): screenshot, log output, or manual verification note
 3. Check for "merged" items: if a todo was merged into another, verify the merged item's implementation covers the original acceptance criteria. **Merged ≠ Complete** — status stays `in_progress` until behavior ships
 4. Check for pinned requests: if the user requested the same thing twice or more, it is **pinned critical** — cannot be closed without all three evidence types
-5. Write reconciliation result to `architect/review-findings/{milestone}-goal-reconciliation.md`
+5. Write reconciliation result to `architect/review-findings/{milestone}-goal-reconciliation.md` using the table format in [state-templates.md](state-templates.md) (one row per criterion: `Criterion | Code | Test | Status`).
+6. **Run the completion guard** (mandatory, deterministic — this is what makes GATE E bind):
+   ```bash
+   python3 hooks/forge_completion_guard.py \
+     architect/review-findings/{milestone}-goal-reconciliation.md --repo-root .
+   ```
+   Exit 0 is **required** to proceed. The guard fails the gate unless every
+   criterion has a `Code` file:line that resolves and a `Test` that actually
+   exists in source (it excludes the forge artifacts from its search, so naming a
+   test is not enough). **On Codex this is the primary enforcement** — there is no
+   PreToolUse hook, and running the guard is itself a tool call that keeps the turn
+   alive. Escape hatch for a genuine parser edge case: `--override "<reason>"`
+   (logged; justify in FORGE-MEMORY.md). This addresses the #1 observed failure:
+   GATE E was prose-only and bypassed in ~88% of completed runs.
 
 Outcomes:
-- **All criteria have evidence** → proceed to COMPOUND
-- **Any criterion lacks evidence** → loop back to BUILD PHASE with the unmet criteria as the scope (max 1 retry)
+- **Guard exits 0 (all criteria have resolvable evidence)** → proceed to COMPOUND
+- **Guard exits 1 (any criterion lacks evidence)** → loop back to BUILD PHASE with the unmet criteria as the scope (max 1 retry)
 - **Retry exhausted** → escalate to user: "These acceptance criteria have no implementation evidence: {list}"
 
 > **GATE E checkpoint**: Do not proceed to COMPOUND unless every acceptance criterion has code + test evidence mapped in the goal reconciliation artifact. If you are about to codify learnings or move to the next milestone without verifying criteria, STOP — unverified completion is the #1 cause of user trust erosion and compounds across milestones.
@@ -219,8 +232,14 @@ b. Update CLAUDE.md with what was built
 c. Update TODO.md with completion status
 d. Consolidate SUGGESTIONS.md (deduplicate, reconcile, sort by confidence)
 e. Generate summary: what was done, what was deferred, what needs human attention
-f. Update FORGE-STATUS.md with final state
-g. Cleanup: delete `architect/agent-contexts/`, `architect/review-findings/`, `DEFERRED-CHANGES.md`
+f. Update FORGE-STATUS.md with final state and set the completion ledger line
+   **`state: FINALIZED`** (the parseable source of truth for run-complete — distinct
+   from a turn ending). On Claude, the completion-guard PreToolUse hook blocks this
+   write unless GATE E evidence exists for the milestones; on Codex, confirm the
+   final milestone's completion guard passed before writing it.
+g. Cleanup: delete `architect/agent-contexts/` and `DEFERRED-CHANGES.md`. **Keep
+   `architect/review-findings/{milestone}-goal-reconciliation.md`** as the durable
+   completion-evidence ledger (do not delete the reconciliation artifacts).
 
 ---
 
@@ -250,6 +269,16 @@ Reference: [milestone-template.md](milestone-template.md)
 ---
 
 ## Agent Spawning Protocol
+
+**Before each spawn batch** (and before starting a new milestone): run the circuit
+breaker and update the counter — this makes the documented limits behavioral
+(5/98 observed runs blew past 50 spawns, max 118, with zero narration):
+```bash
+python3 hooks/forge_spawn_breaker.py FORGE-STATUS.md   # exit 1 = STOP, save state + ask user
+```
+On exit 0, proceed and increment `spawns` (and `milestones` at milestone start) in
+FORGE-STATUS.md frontmatter; surface the running `spawns/50` count in the phase
+transition write. On exit 1, do not spawn — save state, summarize, ask the user.
 
 For every sub-agent:
 
@@ -368,39 +397,46 @@ The orchestrator creates this file during Step 1 (Intake) and updates it each ti
 
 ---
 
-## Scope Guard Installation
+## Guard Installation
 
-During Step 1 (Intake), the orchestrator installs the scope guard hook:
+During Step 1 (Intake), the orchestrator installs the guard hooks + checkers:
 
-1. Copy the hook script:
+1. Copy the guard scripts:
    ```bash
    mkdir -p .claude/hooks
-   cp .claude/skills/forge-orchestrator/hooks/forge-scope-guard.sh .claude/hooks/forge-scope-guard.sh
-   chmod +x .claude/hooks/forge-scope-guard.sh
+   cp .claude/skills/forge-orchestrator/hooks/forge-scope-guard.sh .claude/hooks/
+   cp .claude/skills/forge-orchestrator/hooks/forge-completion-guard.sh .claude/hooks/
+   cp .claude/skills/forge-orchestrator/hooks/forge_completion_guard.py .claude/hooks/
+   cp .claude/skills/forge-orchestrator/hooks/forge_spawn_breaker.py .claude/hooks/
+   chmod +x .claude/hooks/forge-*.sh .claude/hooks/forge_*.py
    ```
 
-2. Create or update `.claude/settings.local.json` with the PreToolUse hook entry:
+2. Create or update `.claude/settings.local.json` with the PreToolUse hook entries
+   (merge, don't overwrite, if the file already exists):
    ```json
    {
      "hooks": {
        "PreToolUse": [
-         {
-           "matcher": "Edit|Write",
-           "hooks": [
-             {
-               "type": "command",
-               "command": ".claude/hooks/forge-scope-guard.sh"
-             }
-           ]
-         }
+         { "matcher": "Edit|Write", "hooks": [ { "type": "command", "command": ".claude/hooks/forge-scope-guard.sh" } ] },
+         { "matcher": "Write|Edit", "hooks": [ { "type": "command", "command": ".claude/hooks/forge-completion-guard.sh" } ] }
        ]
      }
    }
    ```
 
-3. If `.claude/settings.local.json` already exists, merge the PreToolUse entry rather than overwriting.
+**Two guards, two postures:**
 
-The hook is warn-only (exit 0 always). It logs scope violations to stderr, which appears in the agent's conversation as a warning. It does NOT block edits.
+| Guard | Trigger | Posture | Cross-platform |
+|-------|---------|---------|----------------|
+| `forge-scope-guard.sh` | Edit/Write outside declared FILE SCOPE | **warn-only** (exit 0) | Claude hook only |
+| `forge-completion-guard.sh` → `forge_completion_guard.py` | Write that marks a run/milestone complete (`state: FINALIZED`, milestone completed) without passing GATE E | **blocks** (exit 2) | Claude hook; Codex runs `forge_completion_guard.py` directly at GATE E |
+| `forge_spawn_breaker.py` | before each spawn batch / new milestone | **STOP** (exit 1) at limit | run directly on both platforms |
+
+The scope guard stays warn-only (the corpus shows the orchestrator does almost all
+writes; blocking would mostly false-positive). The completion guard blocks because
+false-completion was the dominant failure — but it has an escape hatch
+(`FORGE_GATE_OVERRIDE=1`, logged) so a parser edge case cannot deadlock a
+legitimately-complete run.
 
 ---
 
