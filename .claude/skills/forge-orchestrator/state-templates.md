@@ -170,3 +170,28 @@ Keep under 3,000 tokens via aggressive deduplication.
 - Delete entries that are now captured in CLAUDE.md (promoted to project convention)
 
 **Write frequency**: Updated during the COMPOUND step of each milestone.
+
+FORGE-MEMORY.md doubles as the OKF `log.md` (append-only, newest-first). Stamp it
+`--type forge-memory`.
+
+---
+
+## OKF Forge Type Vocabulary
+
+When the COMPOUND step stamps artifacts (`okf_bundle.py stamp <file> --type <t>`),
+use this controlled vocabulary so `index.md` can group and `freshness` can reason:
+
+| Artifact | `type` |
+|----------|--------|
+| FORGE-STATUS.md | `forge-status` |
+| FORGE-HANDOFF.md | `forge-handoff` |
+| FORGE-MEMORY.md (= log.md) | `forge-memory` |
+| SUGGESTIONS.md | `suggestions` |
+| HUMAN-INPUT.md / MISSION-CONTROL.md | `steering` |
+| architect/research/*.md | `research` |
+| architect/review-findings/*.md | `review-finding` |
+| milestone spec files | `milestone` |
+| index.md | `index` (reserved) |
+
+OKF requires only `type`; these are extension-friendly. `index.md` additionally
+carries `okf_version: 0.1` (pin the Draft version).

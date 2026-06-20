@@ -72,7 +72,7 @@ g. Parse goal into milestones (see [milestone-template.md](milestone-template.md
    - Concrete goals: structure into milestones directly
 h. Write initial plan to TODO.md
 i. Add forge sections to CLAUDE.md (see [claude-md-sections.md](claude-md-sections.md))
-j. Add forge artifacts to .git/info/exclude: `FORGE-STATUS.md`, `FORGE-HANDOFF.md`, `FORGE-MEMORY.md`, `HUMAN-INPUT.md`, `MISSION-CONTROL.md`, `SUGGESTIONS.md`, `DEFERRED-CHANGES.md`, `architect/agent-contexts/`, `architect/review-findings/`, `.claude/forge-scopes.json`
+j. Add forge artifacts to .git/info/exclude: `FORGE-STATUS.md`, `FORGE-HANDOFF.md`, `FORGE-MEMORY.md`, `HUMAN-INPUT.md`, `MISSION-CONTROL.md`, `SUGGESTIONS.md`, `DEFERRED-CHANGES.md`, `architect/agent-contexts/`, `architect/review-findings/`, `.claude/forge-scopes.json`, `index.md`, `log.md`
 k. Create `.claude/forge-scopes.json` with empty agents map: `{"agents": {}}`
 l. Install the guard hooks + checkers (scope guard, completion guard, spawn breaker) into `.claude/hooks/` and register the PreToolUse entries in `.claude/settings.local.json` (see Guard Installation below). Initialize FORGE-STATUS.md counters `spawns: 0`, `milestones: 0`, `state: running`.
 
@@ -216,8 +216,13 @@ After gate passes, codify learnings:
 5. Update FORGE-MEMORY.md with learnings (minimum-signal gate: "Will a future agent act better knowing this?")
 6. Update FORGE-STATUS.md with current state
 7. Update FORGE-HANDOFF.md (full checkpoint)
-8. Git commit milestone output
-9. **Transition to next milestone immediately**: Read the next milestone's scope
+8. **EMIT the OKF layer** (makes the artifact tree self-describing + navigable —
+   see [OKF Artifact Layer](#okf-artifact-layer)):
+   - Stamp each root forge artifact: `python3 .claude/hooks/okf_bundle.py stamp <file> --type <forge-type>` (vocabulary in [state-templates.md](state-templates.md): forge-status / handoff / memory / suggestions / research / review-finding / milestone …). FORGE-MEMORY.md is the canonical OKF `log.md` (append-only, newest-first).
+   - Regenerate the root index: `python3 .claude/hooks/okf_bundle.py index . --okf-version 0.1`, then enrich its body with the FORGE-HANDOFF Bootstrap read-order + grouped `architect/research/*` and `architect/review-findings/*` listings with one-line descriptions, and backlinks (research ↔ review-finding ↔ milestone).
+   - Emission is single-writer (orchestrator only).
+9. Git commit milestone output
+10. **Transition to next milestone immediately**: Read the next milestone's scope
    from TODO.md right now. Do NOT produce a standalone summary between milestones
    — on Codex CLI, a text-only response (no tool calls) ends the turn and halts
    the orchestration. The summary is implicit in the state files you just updated.
@@ -237,7 +242,12 @@ f. Update FORGE-STATUS.md with final state and set the completion ledger line
    from a turn ending). On Claude, the completion-guard PreToolUse hook blocks this
    write unless GATE E evidence exists for the milestones; on Codex, confirm the
    final milestone's completion guard passed before writing it.
-g. Cleanup: delete `architect/agent-contexts/` and `DEFERRED-CHANGES.md`. **Keep
+g. **OKF final pass**: regenerate the root index, then
+   `python3 .claude/hooks/okf_bundle.py validate . --recursive` (every artifact
+   carries `type`+`timestamp`, reserved files exempt) and
+   `python3 .claude/hooks/okf_bundle.py freshness . --recursive` (flag any artifact
+   stamped before the repo's current state — re-stamp or mark historical).
+h. Cleanup: delete `architect/agent-contexts/` and `DEFERRED-CHANGES.md`. **Keep
    `architect/review-findings/{milestone}-goal-reconciliation.md`** as the durable
    completion-evidence ledger (do not delete the reconciliation artifacts).
 
@@ -408,7 +418,8 @@ During Step 1 (Intake), the orchestrator installs the guard hooks + checkers:
    cp .claude/skills/forge-orchestrator/hooks/forge-completion-guard.sh .claude/hooks/
    cp .claude/skills/forge-orchestrator/hooks/forge_completion_guard.py .claude/hooks/
    cp .claude/skills/forge-orchestrator/hooks/forge_spawn_breaker.py .claude/hooks/
-   chmod +x .claude/hooks/forge-*.sh .claude/hooks/forge_*.py
+   cp .claude/skills/handoff-fresh/scripts/okf_bundle.py .claude/hooks/   # OKF emitter (single source: handoff-fresh)
+   chmod +x .claude/hooks/forge-*.sh .claude/hooks/forge_*.py .claude/hooks/okf_bundle.py
    ```
 
 2. Create or update `.claude/settings.local.json` with the PreToolUse hook entries
@@ -439,6 +450,31 @@ false-completion was the dominant failure — but it has an escape hatch
 legitimately-complete run.
 
 ---
+
+## OKF Artifact Layer
+
+Forge emits a sprawling artifact tree (FORGE-STATUS/HANDOFF/MEMORY, SUGGESTIONS,
+`architect/research/*`, `architect/review-findings/*`, milestone files). The
+OKF-lite layer makes it self-describing, navigable, and deterministically
+fresh — so a resuming agent (or `/pickup`) can orient in one read and tell
+current state from historical. It adopts **conventions only** (markdown +
+frontmatter); it does NOT depend on the upstream `okf` Python package.
+
+Mechanics (emitter: `.claude/hooks/okf_bundle.py`, single-sourced from
+handoff-fresh; pyyaml-only):
+
+| Element | What | When |
+|---------|------|------|
+| Per-file frontmatter | `type` + ISO `timestamp` (+ forge type vocabulary) | COMPOUND `stamp` |
+| `index.md` | bundle index: read-order + grouped, typed listing + backlinks; carries `okf_version: 0.1` | COMPOUND `index` (orchestrator enriches body) |
+| `log.md` | append-only run history — **FORGE-MEMORY.md is the canonical log** (newest-first) | COMPOUND |
+| recursive validate | every artifact carries `type`+`timestamp` (reserved `index.md`/`log.md` exempt) | FINALIZATION |
+| freshness | flag artifacts stamped before the repo's current state (git HEAD, or mtime outside git) | FINALIZATION + builder intake |
+
+Rules: emission is **single-writer** (orchestrator only); `index.md`/`log.md` are
+git-excluded with the other forge artifacts; keep the emitter additive (do not fork
+toward the heavy upstream package). The same emitter powers handoff-fresh, so any
+change must keep handoff-fresh's `validate` green.
 
 ## Error Recovery
 
