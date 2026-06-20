@@ -96,6 +96,17 @@ Scope: Extractive, high-signal decisions with brief verbatim evidence.
 Token target: 6000-8000
 Rule: Include only high-signal excerpts (decisions, pivots, blockers). Exclude low-signal chatter.
 
+## Last Exchange (Verbatim)
+<!-- Mandatory. Exempt from the chatter/dedup filter. The exact resume anchor /pickup reads first. Redact secrets («redacted»). -->
+**Last user prompt:**
+> {verbatim last user message}
+
+**Last assistant response:**
+> {verbatim last assistant message — or decision-bearing excerpt if long}
+
+**Load-bearing earlier directives (verbatim, in order):**
+1. "{quoted directive}"
+
 ## Excerpt 1
 [context note]
 > raw excerpt ...
@@ -103,6 +114,51 @@ Rule: Include only high-signal excerpts (decisions, pivots, blockers). Exclude l
 ## Excerpt 2
 [context note]
 > raw excerpt ...
+```
+
+## index.md template (OKF bundle index)
+
+```markdown
+---
+type: index
+okf_version: 0.1
+timestamp: {ISO-8601}
+handoff_role: index
+---
+# Bundle Index
+
+Read in this order (Read Gate):
+1. handoff.md
+2. claude.md
+3. todo.md
+4. state.md
+5. context.md
+
+Other files: agents.md, reports.md, artifacts.md, prior-plans.md, read-receipt.md,
+session-log-digest.md, session-log-chunk.md, handoff-everything.md, log.md
+```
+
+## log.md template (OKF append-only history, optional)
+
+```markdown
+---
+type: log
+timestamp: {ISO-8601}
+handoff_role: log
+---
+# Bundle History (append-only)
+
+- {ISO-8601} — bundle regenerated at HEAD {short-commit}, branch {branch}
+```
+
+## per-file OKF frontmatter (prepended to each bundle .md via scripts/okf_bundle.py)
+
+```yaml
+---
+type: handoff
+timestamp: {ISO-8601}
+handoff_role: {state|context|todo|...}
+---
 ```
 
 ## shared onboarding context block template (must be identical in claude.md and agents.md)
@@ -139,6 +195,7 @@ Ready to begin Workspace Preparation.
 ## root HANDOFF.md bridge note
 
 ```markdown
+<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff-fresh-bridge -->
 # Context Handoff Bridge
 
 A fresh-agent bundle was generated.

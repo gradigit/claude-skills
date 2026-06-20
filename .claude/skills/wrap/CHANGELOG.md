@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.4.0] - 2026-06-20
+
+### Added
+- Step 0: capture the verbatim last exchange first, before sync (so a compaction during the later steps cannot lose it)
+- Documented the wrap↔pickup producer→consumer contract pair (`/wrap` closes a session, `/pickup` opens the next)
+
+### Changed
+- Step 3 now notes the handoff v3.0.0 mandatory `## Last Exchange (Verbatim)` + `## Verify Block` + schema marker that make the handoff consumable by `/pickup`
+
 ## [1.3.0] - 2026-02-21
 
 ### Changed

@@ -9,6 +9,10 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Python
+__pycache__/
+*.pyc
+
 # Session/working files
 SESSION.md
 HANDOFF.md

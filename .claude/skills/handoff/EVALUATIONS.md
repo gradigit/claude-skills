@@ -8,9 +8,12 @@
 - [ ] Skill activates
 - [ ] Runs git status to assess current state
 - [ ] Commits uncommitted work (specific files, not `git add -A`)
-- [ ] Creates or overwrites HANDOFF.md in project root
+- [ ] Creates or overwrites HANDOFF.md in project root (full overwrite, not a trailing patch)
+- [ ] Line 1 is the schema marker `<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff -->`
 - [ ] HANDOFF.md includes First Steps, Session Summary, What's Next sections
 - [ ] HANDOFF.md First Steps includes both CLAUDE.md and AGENTS.md when both exist
+- [ ] HANDOFF.md includes a `## Last Exchange (Verbatim)` section with the last user prompt + last assistant response captured verbatim (secrets redacted)
+- [ ] HANDOFF.md includes a `## Verify Block` with at least a branch/HEAD claim as `claim | check-command | expected`
 - [ ] HANDOFF.md includes bootstrap read rule and first-response read-receipt contract
 - [ ] All file paths in HANDOFF.md point to files that actually exist
 - [ ] `.git/info/exclude` contains `HANDOFF.md` and `.handoff-fresh/` by default (`--ignore-mode local`)
@@ -67,3 +70,22 @@
 **Then**
 - [ ] `.gitignore` contains `HANDOFF.md` and `.handoff-fresh/`
 - [ ] `.git/info/exclude` is not required for correctness in this mode
+
+## Scenario 8: Verbatim last exchange captured first (should-trigger, functional)
+
+**Given** a session about to hand off
+**When** `/handoff` runs
+**Then**
+- [ ] Step 0 captures the last user prompt and last assistant response verbatim before other steps
+- [ ] The `## Last Exchange (Verbatim)` section is populated verbatim (not paraphrased), within the token budget
+- [ ] Secrets/credentials that appeared in the turn are redacted («redacted»)
+- [ ] If the session is already compacted, the handoff notes that pre-compaction verbatim detail is recoverable only from the raw transcript path (no fabricated quotes)
+
+## Scenario 9: Verify Block is runnable and consumed by pickup (should-trigger, functional)
+
+**Given** a handoff for work with build/test/branch state
+**When** `/handoff` generates HANDOFF.md and later `/pickup` resumes from it
+**Then**
+- [ ] The `## Verify Block` lists each load-bearing claim as `claim | check-command | expected`
+- [ ] Each check command is actually runnable (not prose)
+- [ ] `/pickup` runs the Verify Block on resume and reports PASS/drift before acting

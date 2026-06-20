@@ -3,9 +3,9 @@ name: handoff
 description: Creates context handoff files that preserve session state for seamless continuation after /clear. Manual command entry point is /handoff. Commits work, updates docs, and generates HANDOFF.md with branching instructions for new sessions. Defaults to local git-ignore for handoff artifacts so they do not pollute working tree status. Use handoff-fresh for brand-new/forked-repo onboarding bundles.
 license: MIT
 metadata:
-  version: "2.5.0"
+  version: "3.0.0"
   author: gradigit
-  updated: "2026-02-22"
+  updated: "2026-06-20"
   tags:
     - context
     - handoff
@@ -35,13 +35,38 @@ Creates context handoff files for seamless session continuation after `/clear`.
 ## Workflow
 
 ```
+- [ ] 0. Capture the verbatim last exchange FIRST (before anything can compact it away)
 - [ ] 1. Assess current state
 - [ ] 2. Handle prerequisites (git, docs)
 - [ ] 3. Commit uncommitted work
 - [ ] 4. Update documentation
-- [ ] 5. Generate HANDOFF.md
+- [ ] 5. Generate HANDOFF.md (incl. Last Exchange + Verify Block)
 - [ ] 6. Validate and confirm
 ```
+
+## Step 0: Capture the Verbatim Last Exchange First
+
+Before any other step, capture — into your working notes — the **last user
+prompt** and **last assistant response** *verbatim* (character-for-character),
+plus any **load-bearing earlier directives** still governing the work. Do this
+first because a context compaction can discard the raw turns at any time; once
+captured you can safely run the rest of the flow.
+
+This is the standardized replacement for the recurring manual workaround of
+typing "save my last prompt and your last response so nothing is lost" into the
+command. It is now part of the contract.
+
+- **Redact** secrets/credentials that appeared in the turn (replace with «redacted»).
+- **Budget** the verbatim block to ~1500 tokens; if the last response was long,
+  quote the decision-bearing portion verbatim and summarize the rest in [brackets].
+- **If the session is already compacted** (you see a compaction summary / boundary
+  rather than the raw turns), capture what the summary preserves, then note in the
+  handoff that pre-compaction verbatim detail is recoverable only from the raw
+  transcript path. Do not fabricate a verbatim quote you no longer have.
+
+> Capture is **manual** (part of `/handoff` and `/wrap`). This skill does not
+> install auto-hooks; the family's contract is explicit-manual, and SessionStart/
+> PreCompact hook injection is unreliable.
 
 ## Quick Mode
 
@@ -146,6 +171,22 @@ Use the standard template from [templates.md](templates.md). For emergency hando
 `/handoff` stays focused on one canonical file (`HANDOFF.md`).  
 Do not generate the multi-file fresh-agent bundle here; that is `/handoff-fresh`.
 
+### Mandatory sections (schema v3.0.0)
+
+Every generated `HANDOFF.md` must include, and they must be non-empty (or marked
+`N/A` with a reason):
+
+- **Line 1 schema marker**: `<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff -->` —
+  lets `/pickup` detect the schema/producer and tell skill-generated from
+  hand-written handoffs.
+- **`## Last Exchange (Verbatim)`** (after Session Summary): the verbatim last
+  user prompt, last assistant response, and load-bearing earlier directives
+  captured in Step 0. This is the resume anchor `/pickup` reads first.
+- **`## Verify Block`** (after Reference Files): the load-bearing claims a
+  resuming agent must not trust blindly, each as `claim | check-command |
+  expected`. `/pickup` runs these on resume. Always include branch/HEAD; add
+  test/health/build checks when the work depends on them.
+
 ### Branching Instructions Pattern
 
 The "First Steps" section is critical — it tells the next session exactly what to read and in what order. The user only needs to say:
@@ -157,10 +198,15 @@ The handoff branches out to all relevant files, eliminating the need for the use
 ### Bootstrap Read Rule (mandatory in generated HANDOFF.md)
 
 Generated `HANDOFF.md` must explicitly say:
-- If prompt says "read HANDOFF.md", treat it as bootstrap for First Steps.
+- If prompt says "read HANDOFF.md", treat it as a `/pickup` bootstrap (preferred:
+  run `/pickup` for the full read-all + verify behavior).
 - Continue reading all files listed in First Steps before replying.
 - Do not send one-file interim acknowledgements.
 - First substantive reply must include a read receipt with one-line takeaway per First Steps file.
+
+> The embedded rule is a **hint**, not the enforcement mechanism. The guarantee
+> lives in the `/pickup` consumer skill, which enforces read-all + receipts +
+> verify even when the artifact is old/hand-written and lacks this clause.
 
 ### Existing Handoff Detection
 
@@ -176,6 +222,7 @@ Each handoff is a **complete snapshot** — never append.
 
 Before confirming, verify:
 
+- [ ] Line 1 is the schema marker `<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff -->`
 - [ ] Every file listed in "First Steps" actually exists
 - [ ] Every file in "Reference Files" table has a valid path
 - [ ] Commit hash matches actual last commit (if applicable)
@@ -183,6 +230,16 @@ Before confirming, verify:
 - [ ] If both CLAUDE.md and AGENTS.md exist, shared project context is not contradictory
 - [ ] HANDOFF.md includes bootstrap read rule and no-interim-summary first-response contract
 - [ ] If in git repo and `--ignore-mode` is not `off`, selected ignore file contains `HANDOFF.md` and `.handoff-fresh/`
+
+**Content completeness** (each present and non-empty, or explicitly `N/A — <reason>`):
+
+- [ ] `## Last Exchange (Verbatim)` — last user prompt + last assistant response captured verbatim, secrets redacted, within the ~1500-token budget
+- [ ] `## Verify Block` — at least a branch/HEAD claim with a check command and expected value
+- [ ] What's Next, Open Questions / Blockers, Current State (with last commit), Failed Approaches
+
+**Final write is a full overwrite.** The last write of `HANDOFF.md` must rewrite
+the whole file from the template — never finalize with a tiny trailing Edit patch.
+Each handoff is a complete, self-validated snapshot.
 
 Then output the confirmation using the template from [templates.md](templates.md).
 
@@ -226,6 +283,7 @@ git commit -m "WIP: JWT auth middleware with refresh token rotation"
 
 **Step 5 — Generate HANDOFF.md:**
 ```markdown
+<!-- HANDOFF-SCHEMA v3.0.0 producer=handoff -->
 # Context Handoff — 2026-02-07
 
 ## First Steps (Read in Order)
@@ -259,6 +317,20 @@ git commit -m "WIP: JWT auth middleware with refresh token rotation"
 - Using RS256 not HS256 — private key in config/keys/
 - Refresh tokens stored in Redis, not JWT (design decision from CLAUDE.md)
 
+## Last Exchange (Verbatim)
+**Last user prompt:**
+\`\`\`
+fix the token expiry edge cases next, the 5 failing tests
+\`\`\`
+**Last assistant response:**
+\`\`\`
+The 5 failures are all in tests/auth.test.ts around clock-skew on exp. Plan: add a
+30s leeway to verifyToken() and assert refresh issues a new exp. Starting there next.
+\`\`\`
+**Load-bearing earlier directives:**
+1. "use RS256, not HS256 — we rotate keys without redeploy"
+2. "refresh tokens go in Redis so we can revoke"
+
 ## Reference Files
 | File | Purpose |
 |------|---------|
@@ -266,6 +338,12 @@ git commit -m "WIP: JWT auth middleware with refresh token rotation"
 | src/routes/login.ts | Login endpoint, token issuance |
 | tests/auth.test.ts | Auth unit tests (3/8 passing) |
 | config/keys/private.pem | RS256 signing key |
+
+## Verify Block
+| Claim | Check command | Expected |
+|-------|---------------|----------|
+| On branch main, HEAD abc1234 | `git rev-parse --short HEAD` | abc1234 |
+| 3 of 8 auth tests passing | `npm test -- tests/auth.test.ts` | 3 passing, 5 failing |
 ```
 
 **Step 6 — Validate and confirm:**
@@ -307,6 +385,7 @@ Update this skill when:
 
 **Applied Learnings:**
 
+- v3.0.0: Schema v3 — mandatory line-1 `<!-- HANDOFF-SCHEMA -->` marker, a verbatim `## Last Exchange` section (last user prompt + last assistant response + load-bearing directives, captured first in Step 0 so compaction can't strip them), and a machine-runnable `## Verify Block` (claim | check | expected) consumed by the new `/pickup` skill. Added content-completeness assertions and a full-overwrite finalize rule (fixes the 47B-vs-12KB stub inconsistency). Standardizes the verbatim-capture workaround users were forcing manually. **Breaking**: old/hand-written HANDOFF.md files lack the marker — `/pickup` still handles them but flags a weak contract.
 - v2.5.0: Added handoff-artifact ignore policy (`--ignore-mode local|shared|off`, default local) so `HANDOFF.md` and `.handoff-fresh/` do not show up as noisy untracked files.
 - v2.4.0: Added mandatory bootstrap read rule in HANDOFF.md so "read handoff.md" prompts automatically trigger full First Steps reading before reply.
 - v2.2.0: Added explicit manual command contract for `/handoff`; clarified separation of responsibilities between `/handoff` (standard continuity) and `/handoff-fresh` (fork-safe fresh onboarding bundle).
@@ -315,4 +394,4 @@ Update this skill when:
 - v2.0.0: Renamed from handing-off. Fixed frontmatter. Added edge case handling, pitfalls table, git ops table, validation step, concrete example. Extracted templates to templates.md.
 - v1.0.0: Initial version based on forging-plans handoff pattern and external best practices
 
-Current version: 2.5.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 3.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
