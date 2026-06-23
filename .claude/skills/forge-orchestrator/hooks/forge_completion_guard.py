@@ -85,24 +85,51 @@ def _excluded(rel: str) -> bool:
     )
 
 
+# A real test reference, not just any substring. The token must look like a test
+# identifier AND appear either in a test-ish file or as an actual test definition —
+# otherwise "export"/"return" trivially "exist" and defeat the anti-Goodhart intent.
+_TEST_PATH = re.compile(r"(^|/)(tests?|__tests__|spec|specs)(/|$)|[._-](test|spec)s?\.", re.IGNORECASE)
+_TEST_DEF = re.compile(r"(\bdef\s+test|\bfunc\s+Test|\bit\(|\btest\(|\bdescribe\(|@Test|\bclass\s+\w*Test|\bTEST(_F|_P)?\()")
+_COMMON_TOKENS = {
+    "export", "return", "import", "const", "let", "var", "function", "func", "class",
+    "def", "test", "tests", "it", "the", "true", "false", "public", "static", "void",
+    "async", "await", "type", "value", "data", "main", "run", "name", "todo", "pass",
+}
+
+
+def _is_test_token(token: str) -> bool:
+    t = token.strip("`\"'")
+    return len(t) >= 4 and t.lower() not in _COMMON_TOKENS
+
+
 def test_exists(repo_root: Path, test_name: str) -> bool:
-    """Confirm the named test is referenced in real source/test files (NOT in the
-    forge artifacts, which would be circular)."""
+    """Confirm the named test genuinely exists: the token is a plausible test
+    identifier AND is found in a test-ish file OR as a test definition — NOT a bare
+    substring in any source file, and NEVER in the forge artifacts (circular)."""
     name = test_name.strip().strip("`")
     if not name:
         return False
     token = re.split(r"[ (\[]", name)[0]  # strip args/desc
+    if not _is_test_token(token):
+        return False
+
+    def _accept(path: str, content: str) -> bool:
+        return not _excluded(path) and (_TEST_PATH.search(path) or bool(_TEST_DEF.search(content)))
+
     try:
         r = subprocess.run(
-            ["git", "-C", str(repo_root), "grep", "-l", "-F", token, "--", ":!architect/", ":!FORGE-*.md"],
+            ["git", "-C", str(repo_root), "grep", "-n", "-F", token, "--", ":!architect/", ":!FORGE-*.md"],
             capture_output=True, text=True, timeout=20,
         )
-        for line in r.stdout.splitlines():
-            if line.strip() and not _excluded(line.strip()):
-                return True
+        if r.returncode == 0:
+            for line in r.stdout.splitlines():
+                parts = line.split(":", 2)  # path:lineno:content
+                if len(parts) == 3 and _accept(parts[0].strip(), parts[2]):
+                    return True
+            return False  # git grep ran and found no test-quality hit — trust it
     except Exception:
         pass
-    # fallback: filesystem grep, skipping forge artifacts
+    # fallback only when git grep is unavailable: restrict to test-path files
     try:
         for p in repo_root.rglob("*"):
             if not p.is_file() or p.stat().st_size >= 2_000_000:
@@ -111,10 +138,11 @@ def test_exists(repo_root: Path, test_name: str) -> bool:
             if _excluded(rel):
                 continue
             try:
-                if token in p.read_text(encoding="utf-8", errors="ignore"):
-                    return True
+                content = p.read_text(encoding="utf-8", errors="ignore")
             except Exception:
                 continue
+            if token in content and (_TEST_PATH.search(rel) or _TEST_DEF.search(content)):
+                return True
     except Exception:
         pass
     return False
@@ -144,7 +172,8 @@ def main() -> int:
     ap.add_argument("--override", default=None, help="escape hatch: proceed despite failure, with a logged reason")
     args = ap.parse_args()
 
-    override = args.override or (os.environ.get("FORGE_GATE_OVERRIDE") and "FORGE_GATE_OVERRIDE=1")
+    _env_override = os.environ.get("FORGE_GATE_OVERRIDE", "").strip().lower() in {"1", "true", "yes", "on"}
+    override = args.override or ("FORGE_GATE_OVERRIDE" if _env_override else None)
     repo_root = Path(args.repo_root).expanduser().resolve()
     artifact = Path(args.artifact).expanduser()
 

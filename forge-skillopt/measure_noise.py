@@ -60,6 +60,7 @@ def main() -> int:
     print("## Reward Noise Gate")
     worst = 0.0
     failures: list[str] = []
+    any_hard = False
     for ms, runs in sorted(groups.items()):
         softs, hards = [], []
         for run in runs:
@@ -67,6 +68,7 @@ def main() -> int:
                 r = forge_reward.score_run(str(run), ms, repo_root=str(run))
                 softs.append(r["soft"])
                 hards.append(r["hard"])
+                any_hard = any_hard or r["hard"] == 1
             except Exception as e:
                 failures.append(f"- {ms}: scoring {run.name} failed: {e}")
         if len(softs) < args.min_replays:
@@ -83,12 +85,15 @@ def main() -> int:
             failures.append(f"- {ms}: hard inconsistent across replays {hards}")
 
     print(f"\nworst soft_std = {worst:.3f} (threshold {args.max_std})")
+    if not any_hard:
+        failures.append("- no replay EVER achieved hard==1 — the reward never rewards success "
+                        "(mis-specified or no genuinely-complete milestone in the set); optimizing against it is meaningless")
     if failures:
-        print("Status: FAIL — reward too noisy to optimize against.")
+        print("Status: FAIL — reward not safe to optimize against.")
         print("\n".join(failures))
         print("Fix the parseable-state emission (M2 reconciliation / M4 validate) before M6.")
         return 1
-    print("Status: PASS — reward is low-variance; safe to proceed to the M6 optimization run.")
+    print("Status: PASS — reward is low-variance and rewards success; safe to proceed to the M6 optimization run.")
     return 0
 
 

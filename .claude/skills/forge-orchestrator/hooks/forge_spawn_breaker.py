@@ -28,8 +28,17 @@ DEF_MAX_MILESTONES = 10
 
 
 def read_counter(text: str, key: str) -> int:
-    m = re.search(rf"^{key}\s*:\s*(\d+)\s*$", text, re.MULTILINE)
-    return int(m.group(1)) if m else 0
+    """Return the counter value. Fails CLOSED: a present-but-unparseable counter
+    line returns -1 (caller trips), never 0. Absent → 0 (counters start fresh).
+    The lowercase `key` matches the frontmatter (`spawns: N`), not the capitalized
+    display line (`Spawns: N/50.`). No trailing `$` anchor — `spawns: 118 sub-agents`
+    must still read 118, not silently fall through to 0."""
+    m = re.search(rf"^\s*{key}\s*:\s*(\d+)", text, re.MULTILINE)
+    if m:
+        return int(m.group(1))
+    if re.search(rf"^\s*{key}\s*:", text, re.MULTILINE):
+        return -1  # present but no integer — fail closed
+    return 0  # absent — fresh run
 
 
 def main() -> int:
@@ -52,6 +61,10 @@ def main() -> int:
     print(f"spawns={spawns}/{args.max_spawns}  milestones={milestones}/{args.max_milestones}")
 
     tripped = []
+    if spawns == -1:
+        tripped.append("spawns counter present but unparseable — failing closed (fix FORGE-STATUS.md `spawns: <int>`)")
+    if milestones == -1:
+        tripped.append("milestones counter present but unparseable — failing closed (fix FORGE-STATUS.md `milestones: <int>`)")
     if args.check in ("spawn", "both") and spawns >= args.max_spawns:
         tripped.append(f"spawn limit reached ({spawns} >= {args.max_spawns})")
     if args.check in ("milestone", "both") and milestones >= args.max_milestones:

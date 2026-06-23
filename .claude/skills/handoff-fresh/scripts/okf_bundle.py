@@ -96,19 +96,28 @@ def validate(args: argparse.Namespace) -> int:
         print(f"Status: FAIL\n- bundle dir not found: {bundle}")
         return 1
     failures: list[str] = []
+    frontmatter_only = getattr(args, "frontmatter_only", False)
     md_files = _md_files(bundle, getattr(args, "recursive", False))
     if not md_files:
         print(f"Status: FAIL\n- no .md files in {bundle}")
         return 1
+    validated = 0
     for f in md_files:
         if f.name in RESERVED:
             continue  # reserved structural files exempt from type+timestamp
-        meta, _ = split_frontmatter(f.read_text(encoding="utf-8"))
+        text = f.read_text(encoding="utf-8")
+        # --frontmatter-only: only validate already-stamped files (skip non-forge
+        # docs like README). Used by forge FINALIZATION where validate runs at repo
+        # root and must not fail on the whole project's unrelated .md files.
+        if frontmatter_only and not text.lstrip().startswith("---"):
+            continue
+        meta, _ = split_frontmatter(text)
         rel = f.relative_to(bundle)
         if not meta.get("type"):
             failures.append(f"- {rel}: missing required `type` frontmatter key")
         if not meta.get("timestamp"):
             failures.append(f"- {rel}: missing `timestamp`")
+        validated += 1
     index = bundle / "index.md"
     if not index.exists():
         failures.append("- index.md missing (OKF bundle index)")
@@ -121,8 +130,9 @@ def validate(args: argparse.Namespace) -> int:
         print("Status: FAIL")
         print("\n".join(failures))
         return 1
-    scope = "recursively" if getattr(args, "recursive", False) else ""
-    print(f"Status: PASS\n- {len(md_files)} files {scope} carry OKF `type`+`timestamp` (reserved exempt); index.md has okf_version")
+    scope = "recursively " if getattr(args, "recursive", False) else ""
+    note = " (stamped-only)" if frontmatter_only else ""
+    print(f"Status: PASS\n- {validated} {scope}files{note} carry OKF `type`+`timestamp` (reserved exempt); index.md has okf_version")
     return 0
 
 
@@ -137,6 +147,19 @@ def _head_commit_iso(bundle: Path) -> str | None:
     except Exception:
         pass
     return None
+
+
+def _parse_iso(s: str):
+    """Parse an ISO-8601 timestamp (with 'Z' or a numeric offset) to an aware
+    datetime, so comparisons are by real instant — NOT lexicographic (a 'Z' stamp
+    vs a '-05:00' git timestamp sorts wrong as strings)."""
+    s = s.strip()
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+    except Exception:
+        return None
 
 
 def freshness(args: argparse.Namespace) -> int:
@@ -156,6 +179,7 @@ def freshness(args: argparse.Namespace) -> int:
     if not head_iso:
         basis = "git unavailable — using directory mtime"
         ref = datetime.fromtimestamp(bundle.stat().st_mtime, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ref_dt = _parse_iso(ref)
     print(f"## OKF Freshness\nReference ({basis}): {ref}")
     stale: list[str] = []
     for f in _md_files(bundle, getattr(args, "recursive", False)):
@@ -165,7 +189,8 @@ def freshness(args: argparse.Namespace) -> int:
         ts = str(meta.get("timestamp", "")).strip()
         if not ts:
             continue
-        if ref and ts < ref:
+        ts_dt = _parse_iso(ts)
+        if ref_dt and ts_dt and ts_dt < ref_dt:  # compare instants, not strings
             stale.append(f"- {f.relative_to(bundle)}: stamped {ts} < reference {ref}")
     if stale:
         print(f"Status: STALE ({len(stale)})")
@@ -218,6 +243,8 @@ def main() -> int:
     v = sub.add_parser("validate", help="Validate OKF-lite conformance of a bundle dir")
     v.add_argument("bundle_dir")
     v.add_argument("--recursive", action="store_true", help="validate nested dirs too (e.g. architect/**)")
+    v.add_argument("--frontmatter-only", dest="frontmatter_only", action="store_true",
+                   help="only validate already-stamped files (skip non-forge docs); for repo-root recursive runs")
     v.set_defaults(func=validate)
 
     fr = sub.add_parser("freshness", help="Flag artifacts stamped before the repo's current state")
@@ -229,7 +256,8 @@ def main() -> int:
     ix = sub.add_parser("index", help="Generate/refresh a skeleton index.md")
     ix.add_argument("bundle_dir")
     ix.add_argument("--okf-version", dest="okf_version", default="0.1")
-    ix.add_argument("--recursive", action="store_true", default=True)
+    ix.add_argument("--no-recursive", dest="recursive", action="store_false", default=True,
+                    help="list only top-level files (default: recurse)")
     ix.set_defaults(func=index)
 
     args = parser.parse_args()

@@ -261,8 +261,10 @@ f. Update FORGE-STATUS.md with final state and set the completion ledger line
    write unless GATE E evidence exists for the milestones; on Codex, confirm the
    final milestone's completion guard passed before writing it.
 g. **OKF final pass**: regenerate the root index, then
-   `python3 .claude/hooks/okf_bundle.py validate . --recursive` (every artifact
-   carries `type`+`timestamp`, reserved files exempt) and
+   `python3 .claude/hooks/okf_bundle.py validate . --recursive --frontmatter-only`
+   (validates every *stamped* artifact carries `type`+`timestamp`, reserved files
+   exempt; `--frontmatter-only` skips unrelated project docs like README so a
+   repo-root run doesn't fail on non-forge `.md`) and
    `python3 .claude/hooks/okf_bundle.py freshness . --recursive` (flag any artifact
    stamped before the repo's current state — re-stamp or mark historical).
 h. Cleanup: delete `architect/agent-contexts/` and `DEFERRED-CHANGES.md`. **Keep

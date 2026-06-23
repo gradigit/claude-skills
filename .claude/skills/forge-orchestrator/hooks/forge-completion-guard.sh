@@ -15,24 +15,28 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-TOOL=$(echo "$INPUT" | jq -r '.tool_name // empty')
+# Defensive parse: malformed/non-JSON stdin must not abort under `set -e` (that
+# would surface as a hook error and let the write through). Default to empty.
+TOOL=$(jq -r '.tool_name // empty' <<<"$INPUT" 2>/dev/null) || TOOL=""
 case "$TOOL" in
   Write|Edit) ;;
   *) exit 0 ;;
 esac
 
-FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
-CONTENT=$(echo "$INPUT" | jq -r '.tool_input.content // .tool_input.new_string // empty')
-CWD=$(echo "$INPUT" | jq -r '.cwd // empty')
+FILE_PATH=$(jq -r '.tool_input.file_path // empty' <<<"$INPUT" 2>/dev/null) || FILE_PATH=""
+CONTENT=$(jq -r '.tool_input.content // .tool_input.new_string // empty' <<<"$INPUT" 2>/dev/null) || CONTENT=""
+CWD=$(jq -r '.cwd // empty' <<<"$INPUT" 2>/dev/null) || CWD=""
 [[ -z "$CWD" ]] && CWD="$(pwd)"
 
-# Only engage when the write signals completion.
+# Only engage when the write signals completion. The milestone-completed pattern
+# tolerates leading whitespace and either list marker (an indented checkbox must
+# not slip past).
 is_completion=false
 case "$FILE_PATH" in
   *FORGE-STATUS.md|*FORGE-HANDOFF.md) ;;
   *) FILE_PATH="" ;;
 esac
-if echo "$CONTENT" | grep -qiE 'state:[[:space:]]*finalized|status:[[:space:]]*completed|^- \[x\] Milestone .*completed'; then
+if echo "$CONTENT" | grep -qiE 'state:[[:space:]]*finalized|status:[[:space:]]*completed|^[[:space:]]*[-*][[:space:]]+\[x\][[:space:]]*Milestone .*completed'; then
   is_completion=true
 fi
 [[ "$is_completion" == "false" ]] && exit 0

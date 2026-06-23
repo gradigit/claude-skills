@@ -69,10 +69,23 @@ def _coverage(guard, recon: Path, repo_root: Path) -> tuple[float, int, int]:
     return ok / len(rows), ok, len(rows)
 
 
-def _gate_adherence(status_text: str) -> float:
-    reached = sum(1 for g in GATES if re.search(rf"GATE {g}\b.*(reached|pass|✓|\[x\])", status_text, re.IGNORECASE)
-                  or re.search(rf"gate_{g.lower()}\s*[:=]\s*(true|pass|reached)", status_text, re.IGNORECASE))
-    return reached / len(GATES)
+def _gate_adherence(run: Path, status_text: str) -> float:
+    """Artifact-grounded gate proxy. The orchestrator does NOT serialize per-gate
+    markers, so regexing 'GATE X reached' always returned 0. Instead, score the
+    fraction of the pipeline's actual outputs that exist: research produced
+    (RESEARCH/A), review-findings produced (REVIEW/C), a reconciliation table (GATE E),
+    and a FINALIZED ledger (FINALIZATION). These are the durable artifacts a real run
+    leaves behind."""
+    def has_files(rel: str) -> bool:
+        d = run / rel
+        return d.is_dir() and any(p.suffix == ".md" for p in d.glob("*.md"))
+    signals = [
+        has_files("architect/research"),
+        has_files("architect/review-findings"),
+        any((run / "architect" / "review-findings").glob("*-goal-reconciliation.md")) if (run / "architect" / "review-findings").is_dir() else False,
+        bool(re.search(r"state\s*:\s*finalized", status_text, re.IGNORECASE)),
+    ]
+    return sum(1 for s in signals if s) / len(signals)
 
 
 def _claims_complete(status_text: str) -> bool:
@@ -100,7 +113,7 @@ def score_run(run_dir: str, milestone: str, repo_root: str | None = None) -> dic
     status_text = status_file.read_text(encoding="utf-8") if status_file.exists() else ""
 
     coverage, ok, total = _coverage(guard, recon, root)
-    gates = _gate_adherence(status_text)
+    gates = _gate_adherence(run, status_text)
     scope_viol = _scope_violation_rate(run)
     claims = _claims_complete(status_text)
 
@@ -113,7 +126,10 @@ def score_run(run_dir: str, milestone: str, repo_root: str | None = None) -> dic
         + WEIGHTS["not_false_completion"] * (1.0 - false_completion)
         + WEIGHTS["not_scope_violation"] * (1.0 - scope_viol)
     )
-    hard = int(total > 0 and ok == total and gates >= 1.0 and scope_viol == 0.0)
+    # hard = every criterion evidence-backed, no false completion, no scope violation.
+    # (gate_adherence is a soft proxy only — it is NOT required for hard, because the
+    # criteria-coverage check via the M2 guard is the real all-or-nothing signal.)
+    hard = int(total > 0 and ok == total and false_completion == 0.0 and scope_viol == 0.0)
 
     return {
         "id": milestone,

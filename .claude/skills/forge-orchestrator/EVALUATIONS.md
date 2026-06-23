@@ -99,7 +99,7 @@
 **When** COMPOUND emits the OKF layer and FINALIZATION validates
 **Then**
 - [ ] Root artifacts are stamped with a `type` + `timestamp`; `index.md` carries `okf_version`
-- [ ] `okf_bundle.py validate . --recursive` passes (reserved index.md/log.md exempt)
+- [ ] `okf_bundle.py validate . --recursive --frontmatter-only` passes (every stamped artifact has type+timestamp; reserved index.md/log.md exempt; unrelated project docs skipped)
 - [ ] `okf_bundle.py freshness . --recursive` flags any artifact stamped before the repo's current state
 - [ ] FORGE-MEMORY.md is treated as the canonical append-only OKF log
 
