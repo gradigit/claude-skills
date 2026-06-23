@@ -1,0 +1,1 @@
+{"id":"cache-layer","milestone":"cache-layer","task_type":"feature","repo_url":"<repo>","base_sha":"<pinned-sha>","acceptance_criteria":["LRU eviction","TTL expiry"],"timeout_s":3600}

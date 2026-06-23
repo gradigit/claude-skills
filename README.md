@@ -107,10 +107,10 @@ Standalone skill. No dependencies on other skills in this collection.
 | Skill | Layer | Version | Description |
 |-------|-------|---------|-------------|
 | [forge-claude-teams](.claude/skills/forge-claude-teams/) | 0 (practices) | 1.1.0 | Claude Code best practices for Agent tool, TeamCreate, SendMessage |
-| [forge-codex-multiagent](.claude/skills/forge-codex-multiagent/) | 0 (practices) | 1.1.0 | Codex CLI best practices for spawn_agent, fork_context, batch processing |
-| [forge-research](.claude/skills/forge-research/) | 1 (capability) | 1.1.0 | Autonomous multi-agent research with hypothesis tracking and adversarial challenge |
-| [forge-builder](.claude/skills/forge-builder/) | 1 (capability) | 1.2.0 | Autonomous building/coding with self-review, self-improvement, and quality gates |
-| [forge-orchestrator](.claude/skills/forge-orchestrator/) | 2 (orchestrator) | 1.4.0 | Sequences research and building through milestone-gated cycles with compound learning |
+| [forge-codex-multiagent](.claude/skills/forge-codex-multiagent/) | 0 (practices) | 1.2.0 | Codex CLI best practices — incl. role→prompt templates (#15250), 429 resilience, turn keep-alive |
+| [forge-research](.claude/skills/forge-research/) | 1 (capability) | 1.2.0 | Autonomous multi-agent research with hypothesis tracking and adversarial challenge |
+| [forge-builder](.claude/skills/forge-builder/) | 1 (capability) | 1.3.0 | Autonomous building/coding with self-review, self-improvement, and quality gates |
+| [forge-orchestrator](.claude/skills/forge-orchestrator/) | 2 (orchestrator) | 1.5.0 | Milestone-gated cycles with hook-enforced gates, OKF artifact layer, and compound learning |
 
 Layered architecture with custom agents for execution isolation:
 
@@ -123,6 +123,8 @@ forge-orchestrator (Layer 2)
 ```
 
 Use `/forge [goal]` to launch the orchestrator, or invoke Layer 1 skills standalone with `/forge-research [topic]` or `/forge-builder [task]`. See [AGENTS.md](AGENTS.md) for the full dependency graph and custom agent details.
+
+The orchestrator's terminal gates are **hook-enforced** (`forge_completion_guard.py` blocks evidence-free completion; `forge_spawn_breaker.py` enforces the circuit limits) and its artifact tree is organized with an **OKF-lite layer** (`okf_bundle.py`). [forge-skillopt/](forge-skillopt/) is an optional, evidence-gated pilot for optimizing the orchestrator prose with [SkillOpt](https://github.com/microsoft/SkillOpt) against a deterministic reward over real forge runs — the gradable substrate (reward scorer, security gate, noise gate) is built and tested; the optimization run is budget-gated.
 
 ## Why These Exist
 

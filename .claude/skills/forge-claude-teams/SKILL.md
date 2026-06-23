@@ -450,4 +450,4 @@ Update this skill when:
 3. **Concurrency limits change**: Update parallelism table if rate limits or platform caps change
 4. **New isolation mechanism**: If Claude Code adds native worktree parameters to Agent tool, update conflict prevention
 
-Current version: 1.0.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
