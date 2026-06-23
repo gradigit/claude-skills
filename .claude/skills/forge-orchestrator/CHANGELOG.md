@@ -17,6 +17,7 @@ actually happening — so the gates are now mechanical.
 ### Changed
 - Guard Installation now installs both guards + the OKF emitter; git-exclude adds `index.md`/`log.md`.
 - (Codex parity, role templates, 429 resilience, turn keep-alive live in forge-codex-multiagent / forge-builder / forge-research.)
+- **Context-injection rework**: collapsed the triple-stated gates — removed the redundant Step Completion Protocol per-gate restatement; each gate is now defined once (canonical inline `> GATE X` at its phase) with the compact ladder as the always-on pointer. Added a "Loading model" note (read sections on-demand per phase, don't hold the full body — full-body re-reading drove ~40% of runs to compact mid-run) and a compaction-defense note (D/E + the breaker bind via hooks even when prose is compacted; `state: FINALIZED` is the source of truth).
 
 ### Fixed
 - Deleted dead byte-identical bundled `agents/` (canonical: `.claude/agents/`); fixed the stale "bundles agents" note.

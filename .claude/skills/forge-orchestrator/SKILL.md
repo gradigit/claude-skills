@@ -42,17 +42,29 @@ Sequences research and building through milestone-gated cycles with review, impr
 - [ ] 3. Finalization                          → produces: completion summary
 ```
 
-### Step Completion Protocol
+**Loading model:** This ladder is your always-on phase pointer. Read each step's full
+section (and its inline `> GATE` detail) when you *enter* that phase — you don't need
+to hold the whole skill body in context between phases. Full-body re-reading every
+turn drove ~40% of real runs to compact mid-run (worst: 142 compactions), which
+corrupts state; lean on the ladder + the persisted FORGE-STATUS.md instead.
 
-**Every phase must produce visible output before the next phase begins.** GATE markers are hard checkpoints.
+### Gate Protocol
 
-- **GATE A** (after Step 1): Milestones must be written to TODO.md and platform practices must be read. If you haven't parsed milestones or read the practices guide, STOP.
-- **GATE B** (after PLANNING, before BUILD): A reviewed implementation plan must exist. If the adversarial reviewer hasn't critiqued the plan, STOP — building without a reviewed plan is the #1 cause of rework.
-- **GATE C** (after REVIEW + SECOND-OPINION, before IMPROVEMENT): All review findings must be collected and serialized to `architect/review-findings/`. If you haven't fanned out reviewers, STOP — skipping fresh-context review eliminates 40-60% of quality improvement.
-- **GATE D** (after QUALITY GATE, before GOAL RECONCILIATION): The quality gate must have passed. If the gate hasn't been evaluated, STOP — ungated work codifies bad patterns.
-- **GATE E** (after GOAL RECONCILIATION, before COMPOUND): Every acceptance criterion must have code evidence and test evidence. If any criterion lacks evidence, STOP — codifying completion on unverified work propagates false confidence to future milestones.
+The `── GATE … ──` markers in the ladder above are **hard STOP checkpoints**: every
+phase must produce visible output before the next begins. To keep context lean, each
+gate is defined **once, inline at its phase boundary** (the `> GATE X` blockquotes in
+the steps below). The ladder is the always-on pointer; read a gate's full detail when
+you reach its phase rather than holding the whole protocol in context.
 
-**Why gates matter:** Without them, the natural tendency is to shortcut from BUILD directly to the next milestone, skipping review (the primary quality mechanism), improvement (the fix application), and compound (the learning codification). Each shortcut degrades output quality and compounds across milestones.
+**Why they exist:** the natural failure is shortcutting from BUILD straight to the
+next milestone, skipping REVIEW (the primary quality mechanism), IMPROVEMENT, and
+COMPOUND (learning codification) — each shortcut compounds across milestones.
+
+**Defense against compaction:** GATE E (completion evidence) is **machine-enforced** by
+`hooks/forge_completion_guard.py`, and the spawn/milestone circuit breaker by
+`hooks/forge_spawn_breaker.py`, so they bind even if this prose is compacted away — the
+deterministic `state: FINALIZED` ledger, not the in-context markers, is the source of
+truth for "run complete."
 
 ---
 
