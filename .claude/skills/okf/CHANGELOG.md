@@ -1,6 +1,25 @@
 # Changelog — okf skill
 
-## 1.2.1 (2026-07-08)
+## 1.2.2 (2026-07-09)
+
+First-day-of-real-use fixes (found by the first live production bootstrap —
+both issues surfaced within hours of actual work):
+
+- **uv-aware hooks (upstreamed from a production repo's decisions log):** environments that
+  PATH-shim bare `python3` to exit 1 inside agent sessions (e.g. the
+  trailofbits/modern-python Claude plugin) made stock git hooks BLOCK every
+  Claude-side commit and silently neutered the Stop gate (shim exits 1; Stop only
+  blocks on 2). `templates/githooks/pre-commit` and the PostToolUse/Stop commands
+  in `templates/hooks-settings.json` now prefer `uv run python3` when uv exists
+  and fall back to bare `python3`. Command strings match the production repo's adapted
+  install verbatim, so `install-hooks` dedup stays idempotent on re-runs.
+- **Junk-file false positive:** gitignoring `.DS_Store` made the
+  ignored-files-inside-wiki check report a hard ERROR (and the untracked-files
+  warning count Finder droppings). OS/tooling junk (`.DS_Store`, `Thumbs.db`,
+  `desktop.ini`, `__pycache__`, `*.pyc`) is now excluded from both checks —
+  ignoring junk is desirable, not knowledge loss. (Root-level `.DS_Store` also
+  tripped the Stop gate as an "uncommitted code change"; gitignoring it — now
+  false-positive-free — is the documented remedy.)
 
 Fixes from the LIVE A/B test (3 real repos cloned; Sonnet executor ran SKILL.md
 unattended; verdicts: all three detection states executed with zero data damage,

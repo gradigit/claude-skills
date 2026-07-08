@@ -4,6 +4,12 @@
 # bootstrap log entry for how it was installed HERE.
 # Lint errors on wiki-touching commits BLOCK; code-without-wiki commits WARN only.
 # One-off bypass: git commit --no-verify
-command -v python3 >/dev/null 2>&1 || exit 0
+# Prefers `uv run` where uv exists: some environments (e.g. the modern-python
+# Claude plugin) PATH-shim bare python3 to exit 1 inside agent sessions, which
+# would block commits and silently neuter the Stop gate.
 [ -f .okf/lint.py ] || exit 0
+if command -v uv >/dev/null 2>&1; then
+  exec uv run python3 .okf/lint.py pre-commit
+fi
+command -v python3 >/dev/null 2>&1 || exit 0
 exec python3 .okf/lint.py pre-commit

@@ -2,7 +2,7 @@
 name: okf
 description: Bootstraps and maintains OKF/LLM-wiki agent knowledge bases (Karpathy LLM-wiki + Google Open Knowledge Format) in any repo. Auto-detects state — fresh repos get a value-gated bootstrap (full or lite: wiki skeleton, AGENTS.md contract with CLAUDE.md symlinked to it, agent-agnostic git hooks + Claude hooks, git-tracking guard, shipped lint); already-bootstrapped repos get incremental update/lint/audit/repair; legacy or foreign wikis get confirmation-gated migration. Activates on /okf, "bootstrap the wiki", "set up OKF", "llm wiki", "knowledge base for agents", or when a repo's agent wiki needs maintenance/repair. Do NOT use for ordinary documentation work (READMEs, docstrings, API docs) that does not involve the agent-maintained knowledge base.
 argument-hint: "[bootstrap|update|lint|audit|migrate|repair]"
-version: "1.2.1"
+version: "1.2.2"
 ---
 
 # OKF — bootstrap & maintain an agent knowledge base
@@ -130,4 +130,4 @@ The messiest path: it touches existing user files. Ordered:
 
 Update when: (1) the user corrects a flow; (2) OKF spec moves past v0.1 or renames reserved files (config layer makes this a default change); (3) lint changes — keep `scripts/okf_lint.py` and repo copies in sync (`lintVersion` is stamped in state files; re-copy on the next `/okf` run per repo).
 
-Current version: 1.2.1 — see [CHANGELOG.md](CHANGELOG.md) for the adversarial-review-driven changes and declared cuts.
+Current version: 1.2.2 — see [CHANGELOG.md](CHANGELOG.md) for the adversarial-review-driven changes and declared cuts.
