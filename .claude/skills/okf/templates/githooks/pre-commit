@@ -1,0 +1,9 @@
+#!/bin/sh
+# okf pre-commit gate. Wiring varies per repo (local core.hooksPath, a chain from
+# .git/hooks/pre-commit, or a global-hook chain point) — see DECISIONS.md or the
+# bootstrap log entry for how it was installed HERE.
+# Lint errors on wiki-touching commits BLOCK; code-without-wiki commits WARN only.
+# One-off bypass: git commit --no-verify
+command -v python3 >/dev/null 2>&1 || exit 0
+[ -f .okf/lint.py ] || exit 0
+exec python3 .okf/lint.py pre-commit

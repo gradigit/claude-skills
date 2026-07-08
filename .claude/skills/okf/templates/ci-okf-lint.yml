@@ -1,0 +1,16 @@
+# okf wiki lint gate — copy to .github/workflows/okf-lint.yml
+# Cross-agent STRUCTURE backstop: fires no matter which agent (or human) authored
+# the change, and survives clones where hooks aren't installed. It gates
+# well-formedness only — it cannot detect a skipped wiki update.
+name: okf-lint
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+jobs:
+  okf-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint the knowledge base
+        run: python3 .okf/lint.py lint

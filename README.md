@@ -83,6 +83,14 @@ During work, `syncing-docs` keeps documentation in sync with code changes. At th
 
 Claude Code sessions are ephemeral, but project context shouldn't be. These skills maintain CLAUDE.md, AGENTS.md, TODO.md, HANDOFF.md, and `.doc-manifest.yaml` as persistent state files that survive `/clear` and crashes.
 
+### Knowledge Base
+
+| Skill | Version | Description |
+|-------|---------|-------------|
+| [okf](.claude/skills/okf/) | 1.2.1 | Bootstraps + maintains OKF/LLM-wiki agent knowledge bases in any repo (Karpathy LLM-wiki × Google Open Knowledge Format). Auto-detects state → bootstrap / repair / migrate / update; AGENTS.md contract with CLAUDE.md symlinked (agent-agnostic, Codex-native); ships a stdlib lint + git-hook/Claude-hook/CI enforcement layers named honestly for what they do; 55-assertion regression suite |
+
+Born from a 100+-agent research and adversarial-review campaign: deep research on the LLM-wiki/OKF ecosystem, three rounds of adversarial panels (18 reproduced lint defects fixed), and a live A/B test on three real repos (all detection states executed unattended with zero data damage). Design principle: files + grep + `index.md` — no embeddings, no retrieval infra. The enforcement model is deliberately honest: structure guards check shape, write-forcing gates force *that* you write, and knowledge quality stays where it belongs — with the model and the contract.
+
 ## Explicit Commands and Hook Model
 
 - Canonical command entry points:
@@ -91,6 +99,7 @@ Claude Code sessions are ephemeral, but project context shouldn't be. These skil
   - `/handoff-fresh`
   - `/pickup`
   - `/wrap`
+  - `/okf`
 - These flows are manual by default. No implicit side-channel behavior is required.
 - Hook guidance and archive-first cleanup policy for deprecated auto-handoff hooks: see [HOOKS.md](HOOKS.md).
 
