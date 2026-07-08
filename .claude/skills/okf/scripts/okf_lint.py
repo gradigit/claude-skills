@@ -36,7 +36,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.2.0"
+OKF_LINT_VERSION = "1.2.2"
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
 STATE_PATH = os.path.join(OKF_DIR, "last-update.json")
@@ -267,11 +267,15 @@ def git_guard_errors(root, wiki):
                            "('docs/*' + '!%s/') before adding pages.") % (wiki, pat or "an ignore rule", wiki))
     code, out = git("status", "--porcelain", "--ignored", "--", wiki, strip=False)
     if code == 0:
-        ignored = [l[3:] for l in out.splitlines() if l.startswith("!!")]
+        def is_junk(p):
+            # OS/tooling droppings that SHOULD be gitignored — never knowledge loss
+            b = os.path.basename(unquote_git_path(p).rstrip("/"))
+            return b in (".DS_Store", "Thumbs.db", "desktop.ini", "__pycache__") or b.endswith(".pyc")
+        ignored = [l[3:] for l in out.splitlines() if l.startswith("!!") and not is_junk(l[3:])]
         if ignored:
             errors.append("%d file(s) inside the wiki are gitignored (e.g. %s) — fix .gitignore with parent re-inclusion, not bare negation"
                           % (len(ignored), unquote_git_path(ignored[0])))
-        untracked = [l for l in out.splitlines() if l.startswith("??")]
+        untracked = [l for l in out.splitlines() if l.startswith("??") and not is_junk(l[3:])]
         if untracked:
             warnings.append("wiki has %d untracked file(s) (git '??') — commit them or they will not survive" % len(untracked))
     return errors, warnings

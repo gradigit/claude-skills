@@ -312,5 +312,18 @@ w(d, "wiki/concepts/iw.md", "---\ntype: reference # comment here\ntitle: IW\ndes
 code, out = lint(d, "lint")
 check("inline comment stripped -> warning", "inline '#' comment stripped" in out, out)
 
+# ── R4-35. junk files (gitignored/untracked) never flagged (live finding, v1.2.2)
+d = mkrepo("junkfiles")
+w(d, ".gitignore", ".DS_Store\n")
+w(d, "wiki/.DS_Store", "junk")
+w(d, "wiki/concepts/.DS_Store", "junk")
+code, out = lint(d, "lint")
+check("gitignored .DS_Store in wiki -> no error", code == 0 and "gitignored" not in out, out)
+check("junk not counted as untracked", "untracked file" not in out, out)
+w(d, ".gitignore", ".DS_Store\nwiki/concepts/real-page.md\n")
+w(d, "wiki/concepts/real-page.md", "---\ntype: concept\ntitle: R\ndescription: A real knowledge page that got gitignored and must still be flagged.\n---\n# R\nBody long enough to clear thin threshold in the junk-exclusion regression case.\n")
+code, out = lint(d, "lint")
+check("gitignored real .md still errors", code == 1 and "gitignored" in out, out)
+
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)
