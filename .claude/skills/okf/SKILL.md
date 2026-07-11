@@ -2,7 +2,7 @@
 name: okf
 description: Bootstraps and maintains OKF/LLM-wiki agent knowledge bases (Karpathy LLM-wiki + Google Open Knowledge Format) in any repo. Auto-detects state — fresh repos get a value-gated bootstrap (full or lite: wiki skeleton, AGENTS.md contract with CLAUDE.md symlinked to it, agent-agnostic git hooks + Claude hooks, git-tracking guard, shipped lint); already-bootstrapped repos get incremental update/lint/audit/repair; legacy or foreign wikis get confirmation-gated migration. Activates on /okf, "bootstrap the wiki", "set up OKF", "llm wiki", "knowledge base for agents", or when a repo's agent wiki needs maintenance/repair. Do NOT use for ordinary documentation work (READMEs, docstrings, API docs) that does not involve the agent-maintained knowledge base.
 argument-hint: "[bootstrap|update|lint|audit|migrate|repair]"
-version: "1.2.2"
+version: "1.2.3"
 ---
 
 # OKF — bootstrap & maintain an agent knowledge base
@@ -73,7 +73,7 @@ Always also check: `git rev-parse --show-toplevel` succeeds (no git → bootstra
    - **Claude hooks (scripted merge — never hand-edit settings.json):** render [templates/hooks-settings.json](templates/hooks-settings.json) with `{WIKI}` substituted to `.okf/hooks-fragment.json`, then run `python3 .okf/lint.py install-hooks .okf/hooks-fragment.json` — it deep-merges only `hooks.*` entries, is idempotent, backs up an existing settings.json, and refuses to touch invalid JSON. SessionStart + PostToolUse + the Stop gate are all default; to disable the Stop gate later, remove its Stop block.
    - **CI backstop:** copy [templates/ci-okf-lint.yml](templates/ci-okf-lint.yml) → `.github/workflows/okf-lint.yml` (or adapt for GitLab). A backstop matters MOST where git hooks couldn't be installed (routing case 0/2 above) — install it there even if the repo had no CI; where hooks are live it's optional.
    - Git-tracking guard per invariant 5.
-8. **Commit + stamp (order matters).** Append the bootstrap entry to `log.md` BEFORE the bootstrap commit (so the log ships in it); add `.okf/last-update.json` and `.okf/hooks-fragment.json` to `.gitignore` (**state is per-clone machine state, deliberately untracked** — it records THIS clone's review anchor; tracking it causes worktree/collaborator churn, and fresh clones simply re-anchor with one full pass); `git init` if needed; `git add` wiki, AGENTS.md, CLAUDE.md, `.okf/`, settings; make the bootstrap commit; THEN `python3 .okf/lint.py state-update` (needs the commit to anchor to; leaves nothing uncommitted because state is ignored); run `python3 .okf/lint.py lint` and show the output.
+8. **Commit + stamp (order matters).** Append the bootstrap entry to `log.md` BEFORE the bootstrap commit (so the log ships in it); add `.okf/last-update.json`, `.okf/hooks-fragment.json`, and `.okf/log.lock` to `.gitignore` (**state is per-clone machine state, deliberately untracked** — it records THIS clone's review anchor; tracking it causes worktree/collaborator churn, and fresh clones simply re-anchor with one full pass); `git init` if needed; `git add` wiki, AGENTS.md, CLAUDE.md, `.okf/`, settings; make the bootstrap commit; THEN `python3 .okf/lint.py state-update` (needs the commit to anchor to; leaves nothing uncommitted because state is ignored); run `python3 .okf/lint.py lint` and show the output.
 
 **L. Lite profile** (repos below the value bar): contract + symlink + git-tracking guard + `.okf/` (lint + config **with `"profile": "lite"`** — the marker detection and noop-check use to distinguish lite from full) + a bare `<wiki>/index.md` + `log.md`. No generated pages, no state machine use, no CI — and **no hooks**: lite is guidance-layer only (the Stop-gate-default decision applies to FULL installs; say so to the user when choosing lite). `/okf` upgrades lite→full later on request (generate pages if warranted, install hooks, set `"profile": "full"`).
 
@@ -130,4 +130,4 @@ The messiest path: it touches existing user files. Ordered:
 
 Update when: (1) the user corrects a flow; (2) OKF spec moves past v0.1 or renames reserved files (config layer makes this a default change); (3) lint changes — keep `scripts/okf_lint.py` and repo copies in sync (`lintVersion` is stamped in state files; re-copy on the next `/okf` run per repo).
 
-Current version: 1.2.2 — see [CHANGELOG.md](CHANGELOG.md) for the adversarial-review-driven changes and declared cuts.
+Current version: 1.2.3 — see [CHANGELOG.md](CHANGELOG.md) for the adversarial-review-driven changes and declared cuts.
