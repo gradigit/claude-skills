@@ -1,5 +1,18 @@
 # Changelog — okf skill
 
+## 1.2.3 (2026-07-11)
+
+Day-3 refinements from two production repos:
+
+- **Hooks use `uv run --no-project python3`**: plain `uv run` in a repo with a
+  pyproject creates/syncs the project venv on every hook and pre-commit fire
+  (observed live in a production repo — the commit hook created a `.venv`). The
+  lint is stdlib-only; `--no-project` removes the side effect.
+- **`.okf/log.lock` added to the bootstrap gitignore list** (upstreamed from a
+  production repo) — per-clone hook lock, same class as `last-update.json`.
+- Lint message: "untracked file(s)" → "untracked path(s)" (git porcelain reports
+  an untracked directory as one path, so "file" undercounted).
+
 ## 1.2.2 (2026-07-09)
 
 First-day-of-real-use fixes (found by the first live production bootstrap —

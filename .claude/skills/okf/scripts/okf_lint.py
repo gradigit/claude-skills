@@ -36,7 +36,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.2.2"
+OKF_LINT_VERSION = "1.2.3"
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
 STATE_PATH = os.path.join(OKF_DIR, "last-update.json")
@@ -277,7 +277,7 @@ def git_guard_errors(root, wiki):
                           % (len(ignored), unquote_git_path(ignored[0])))
         untracked = [l for l in out.splitlines() if l.startswith("??") and not is_junk(l[3:])]
         if untracked:
-            warnings.append("wiki has %d untracked file(s) (git '??') — commit them or they will not survive" % len(untracked))
+            warnings.append("wiki has %d untracked path(s) (git '??') — commit them or they will not survive" % len(untracked))
     return errors, warnings
 
 # ---------------------------------------------------------------- lint

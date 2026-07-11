@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f .okf/lint.py ]; then if command -v uv >/dev/null 2>&1; then uv run python3 .okf/lint.py hook; else python3 .okf/lint.py hook; fi; fi"
+            "command": "if [ -f .okf/lint.py ]; then if command -v uv >/dev/null 2>&1; then uv run --no-project python3 .okf/lint.py hook; else python3 .okf/lint.py hook; fi; fi"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -f .okf/lint.py ]; then if command -v uv >/dev/null 2>&1; then uv run python3 .okf/lint.py stop-gate; else python3 .okf/lint.py stop-gate; fi; fi"
+            "command": "if [ -f .okf/lint.py ]; then if command -v uv >/dev/null 2>&1; then uv run --no-project python3 .okf/lint.py stop-gate; else python3 .okf/lint.py stop-gate; fi; fi"
           }
         ]
       }
