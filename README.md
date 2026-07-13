@@ -87,7 +87,7 @@ Claude Code sessions are ephemeral, but project context shouldn't be. These skil
 
 | Skill | Version | Description |
 |-------|---------|-------------|
-| [okf](.claude/skills/okf/) | 1.2.1 | Bootstraps + maintains OKF/LLM-wiki agent knowledge bases in any repo (Karpathy LLM-wiki × Google Open Knowledge Format). Auto-detects state → bootstrap / repair / migrate / update; AGENTS.md contract with CLAUDE.md symlinked (agent-agnostic, Codex-native); ships a stdlib lint + git-hook/Claude-hook/CI enforcement layers named honestly for what they do; 55-assertion regression suite |
+| [okf](.claude/skills/okf/) | 1.2.3 | Bootstraps + maintains OKF/LLM-wiki agent knowledge bases in any repo (Karpathy LLM-wiki × Google Open Knowledge Format). Auto-detects state → bootstrap / repair / migrate / update; AGENTS.md contract with CLAUDE.md symlinked (agent-agnostic, Codex-native); ships a stdlib lint + git-hook/Claude-hook/CI enforcement layers named honestly for what they do; 58-assertion regression suite |
 
 Born from a 100+-agent research and adversarial-review campaign: deep research on the LLM-wiki/OKF ecosystem, three rounds of adversarial panels (18 reproduced lint defects fixed), and a live A/B test on three real repos (all detection states executed unattended with zero data damage). Design principle: files + grep + `index.md` — no embeddings, no retrieval infra. The enforcement model is deliberately honest: structure guards check shape, write-forcing gates force *that* you write, and knowledge quality stays where it belongs — with the model and the contract.
 
