@@ -2,6 +2,15 @@
 
 All notable changes to the forge-codex-multiagent skill.
 
+## [1.2.0] - 2026-06-21
+
+### Added
+- §1c "Codex Role Selection — prompt-templates": forge-* roles can't be spawned by name on Codex (#15250, 0/98 runs), so map each to a built-in `agent_type` (explorer/worker) with its quality bar inlined; mandate programmatic 7-tag injection.
+- §6 "Rate-Limit (429) Resilience": 429 was the #1 real failure (1072×, ~46% blind re-spawns) — backoff+jitter, spawns-per-minute budget, pause-and-drain, task-signature dedup cache; a 429 is transient (not counted to retries).
+
+### Fixed
+- `wait()` → `wait_agent()` (real binary tool) in body, decision table, and quick-ref; Recovery Protocol example uses `agent_type=`/`message=`.
+
 ## [1.1.1] - 2026-06-20
 
 ### Fixed

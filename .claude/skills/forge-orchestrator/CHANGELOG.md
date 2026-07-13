@@ -2,6 +2,26 @@
 
 All notable changes to the forge-orchestrator skill.
 
+## [1.5.0] - 2026-06-21
+
+Evidence-driven elevation from a 9-agent eval of 233 real Codex runs + the Claude
+forge runs (see PR). The failures forge was hardened against in prose were the ones
+actually happening — so the gates are now mechanical.
+
+### Added
+- **Hook-enforced GATE E** (`hooks/forge_completion_guard.py` + `forge-completion-guard.sh`): deterministic, platform-agnostic anti-false-completion guard (every acceptance criterion needs a resolvable Code file:line + an existing Test; excludes forge artifacts from its search → anti-Goodhart; escape hatch logged). False-completion was bypassed in ~88% of completed runs.
+- **Behavioral circuit breaker** (`hooks/forge_spawn_breaker.py`) with persisted `spawns`/`milestones` counters and a parseable `state: FINALIZED` completion ledger.
+- **OKF artifact layer**: COMPOUND stamps the tree + regenerates `index.md`; FINALIZATION runs recursive validate + freshness (FORGE-MEMORY = canonical OKF log). Emitter `okf_bundle.py` extended (recursive/reserved-exempt/freshness/index), additive — handoff-fresh regression green.
+- **Directive-vs-inquiry intake classifier** (inquiry runs skip the build loop) and reviewer-role routing for the 4 previously-unmapped roles.
+
+### Changed
+- Guard Installation now installs both guards + the OKF emitter; git-exclude adds `index.md`/`log.md`.
+- (Codex parity, role templates, 429 resilience, turn keep-alive live in forge-codex-multiagent / forge-builder / forge-research.)
+- **Context-injection rework**: collapsed the triple-stated gates — removed the redundant Step Completion Protocol per-gate restatement; each gate is now defined once (canonical inline `> GATE X` at its phase) with the compact ladder as the always-on pointer. Added a "Loading model" note (read sections on-demand per phase, don't hold the full body — full-body re-reading drove ~40% of runs to compact mid-run) and a compaction-defense note (GATE E + the spawn/milestone breaker bind via hooks even when prose is compacted; `state: FINALIZED` is the source of truth).
+
+### Fixed
+- Deleted dead byte-identical bundled `agents/` (canonical: `.claude/agents/`); fixed the stale "bundles agents" note.
+
 ## [1.4.0] - 2026-03-06
 
 ### Added
@@ -82,4 +102,4 @@ Preventive hardening based on forge-research production eval (C+ grade — skipp
 - Reference files: state-templates.md, steering-templates.md, milestone-template.md, claude-md-sections.md, compaction-protocol.md, sub-agent-template.md
 
 ### Context
-Layer 2 orchestrator skill — sequences forge-research and forge-builder through milestone-gated cycles. References Layer 0 practices (forge-claude-teams or forge-codex-multiagent) and Layer 1 capabilities. Bundles 4 custom agent definitions in agents/ directory.
+Layer 2 orchestrator skill — sequences forge-research and forge-builder through milestone-gated cycles. References Layer 0 practices (forge-claude-teams or forge-codex-multiagent) and Layer 1 capabilities. The 4 custom agent definitions live in the repo's top-level `.claude/agents/` (and `.codex/agents/` for Codex) — installed by install.sh.
