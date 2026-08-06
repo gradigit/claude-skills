@@ -3,7 +3,7 @@ name: forge-research
 description: "Launches autonomous multi-agent research campaigns with hypothesis tracking, source verification, adversarial challenge, and iterative deepening. Can be used standalone or orchestrated by forge-orchestrator. Invoke with /forge-research [topic]. Do NOT use for building/coding — use forge-builder instead."
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
   author: gradigit
   category: forge
   tags:
@@ -50,6 +50,11 @@ Launches autonomous multi-agent research campaigns with hypothesis tracking and 
 - **GATE D** (after Step 6): You must have adversarial challenge output (either 5-point self-critique or reviewer findings). Skipping adversarial challenge is NEVER acceptable — it is the primary defense against confirmation bias.
 
 **Why gates matter:** Without explicit gates, the natural tendency is to shortcut from "spawn agents" to "write output," skipping hypothesis tracking, adversarial review, and depth research. These are the steps that make forge-research produce better results than a simple multi-agent search.
+
+> **Codex turn keep-alive (at synthesis):** On Codex CLI a text-only response ends
+> the turn. After writing a synthesis/findings file, if more depth cycles remain,
+> immediately read the output back (a tool call) to start the next cycle rather
+> than ending on a prose summary. (See forge-codex-multiagent §9.)
 
 ---
 
@@ -402,4 +407,4 @@ Update this skill when:
 4. **Quality misses**: Low-quality findings slip through — tighten standards or add adversarial checks
 5. **User corrections**: Real-world usage reveals incorrect guidance
 
-Current version: 1.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.2.0. See [CHANGELOG.md](CHANGELOG.md) for history.

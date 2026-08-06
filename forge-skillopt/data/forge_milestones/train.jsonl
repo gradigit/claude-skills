@@ -1,0 +1,2 @@
+{"id":"auth-refresh","milestone":"auth-refresh","task_type":"feature","repo_url":"<repo>","base_sha":"<pinned-sha>","acceptance_criteria":["refresh rotates token","old token invalidated on use"],"timeout_s":3600}
+{"id":"rate-limit-mw","milestone":"rate-limit-mw","task_type":"feature","repo_url":"<repo>","base_sha":"<pinned-sha>","acceptance_criteria":["429 after N requests","per-IP window"],"timeout_s":3600}

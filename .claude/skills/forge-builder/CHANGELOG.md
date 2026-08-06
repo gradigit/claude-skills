@@ -2,6 +2,14 @@
 
 All notable changes to the forge-builder skill.
 
+## [1.3.0] - 2026-06-21
+
+### Added
+- Inline Codex turn keep-alive in the Step Completion Protocol: after a build phase, pair the transition with a tool call (never a text-only "phase done" summary, which ends the Codex turn and halts the build — observed in 19% of completed runs).
+
+### Fixed
+- In-body "Current version" reconciled to frontmatter.
+
 ## [1.2.0] - 2026-03-04
 
 ### Changed

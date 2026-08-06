@@ -3,7 +3,7 @@ name: forge-builder
 description: "Autonomous building/coding skill with self-review, self-improvement, and quality validation loops. Classifies input as directive (build) or inquiry (analyze). Can be used standalone or orchestrated by forge-orchestrator. Invoke with /forge-builder [task]. Do NOT use for research — use forge-research instead."
 license: MIT
 metadata:
-  version: "1.2.0"
+  version: "1.3.0"
   author: gradigit
   category: forge
   tags:
@@ -63,6 +63,12 @@ For directives, auto-detect input:
 - **GATE B** (after Step 3): You must have a phased plan (in TODO.md or output). If you are about to write code without a plan, STOP — even simple tasks benefit from a brief phase list.
 
 **Why gates matter:** Without them, the natural tendency is to skip directly from reading the task to writing code, bypassing platform detection (which governs isolation and conflict prevention) and planning (which prevents rework). The build phases (Step 4) have their own quality gates already — the risk is in the pre-build steps.
+
+> **Codex turn keep-alive (between build phases):** On Codex CLI a text-only
+> response (no tool calls) ends the turn and halts the build. After completing a
+> phase, do NOT emit a standalone "phase N done" summary — pair the transition
+> with a tool call (read the next phase's inputs / mark TODO.md and read on). Save
+> the prose summary for the final step only. (See forge-codex-multiagent §9.)
 
 ---
 
@@ -291,4 +297,4 @@ Update this skill when:
 3. **Build workflow changes**: new phases, reordered phases, or phases that should be skipped
 4. **Platform API changes**: new isolation mechanisms, new checkpointing features
 
-Current version: 1.1.0. See [CHANGELOG.md](CHANGELOG.md) for history.
+Current version: 1.3.0. See [CHANGELOG.md](CHANGELOG.md) for history.

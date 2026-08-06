@@ -1,0 +1,1 @@
+{"id":"audit-log","milestone":"audit-log","task_type":"feature","repo_url":"<repo>","base_sha":"<pinned-sha>","acceptance_criteria":["append-only","tamper-evident hash chain"],"timeout_s":3600}

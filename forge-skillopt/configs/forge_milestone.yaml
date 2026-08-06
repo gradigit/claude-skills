@@ -1,0 +1,35 @@
+# SkillOpt config for the forge-orchestrator pilot.
+# Copy into a SkillOpt checkout at configs/forge_milestone/default.yaml and have it
+# inherit the repo's _base_/default.yaml. Values are conservative per the eval:
+# 1 milestone/rollout, small batch, low concurrency, held-out gate ON.
+
+# _base_: ../_base_/default.yaml   # uncomment in the SkillOpt checkout
+
+env:
+  name: forge_milestone
+  split_dir: data/forge_milestones      # train.jsonl / val.jsonl / test.jsonl
+  workers: 1                            # forge rollouts are heavy — keep low
+  minibatch_size: 8
+  edit_budget: 4                        # max skill edits the optimizer may try
+  run_root: /tmp/forge_rollouts
+  # Backend that runs ONE forge milestone and writes artifacts to {run_dir}.
+  # MUST be a no-Azure backend (codex_exec / claude_code_exec). Example shape:
+  backend_cmd: ""                       # REQUIRED before M6 — leave empty to block accidental spend
+
+optimize:
+  target: forge-orchestrator            # which skill's section we optimize
+  skill_section: "gate/COMPOUND"        # scope to the gate ladder, NOT the whole 423-line doc
+  use_gate: true                        # held-out val gate
+  batch: 4                              # 4–8
+  seed: 42
+  accept_only_on_heldout_improvement: true
+  require_human_review: true            # never auto-accept a gate-ladder rewrite
+
+reward:
+  # weights mirror forge_reward.WEIGHTS; hard dominates acceptance
+  weights: { coverage: 0.40, gates: 0.25, not_false_completion: 0.20, not_scope_violation: 0.15 }
+  lean_on_hard: true
+
+# PRECONDITIONS enforced outside this file (see README):
+#   1. python forge-skillopt/check_no_skillopt_sleep.py  -> PASS (no skillopt_sleep)
+#   2. python forge-skillopt/measure_noise.py <replays>  -> PASS (low-variance reward)
