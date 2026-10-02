@@ -1,5 +1,135 @@
 # Changelog — okf skill
 
+## 1.3.5 (2026-10-03)
+
+From a production audit: 600 claims sampled from the four production wikis were
+checked against each repo's code; 4.3% of the checkable ones were wrong or outdated. The wrong ones were almost all
+exact numbers (a count that had grown, a schema version that had moved) or status lines left standing after the
+work landed ("<feature> stays refused", "open blocker"). Half were wrong when written, half went stale later. One
+commit implemented a feature and updated that feature's page but left the old status and count on a design page
+nobody reopened. Pages whose cited sources had changed were no more likely to be wrong (3.9%) than the rest (5.2%), so
+source churn does not predict these errors.
+
+- **Dead index entries are errors.** An `index.md` entry whose page does not exist now fails lint instead of
+  warning; a line that says `planned` downgrades it to a warning. The pre-commit hook checks every index in the
+  commit-to-be (the staged tree, not the disk) and blocks wiki commits until it is fixed; code-only commits are
+  not blocked. The write-time hook names such entries whenever the session writes a page or index. Production: a
+  sub-index listed a page that was never written, for two months under the old warning.
+  Behaviour change: deleting a page whose index entry remains is now blocked at commit, not just warned.
+- **Sweep the wiki for status lines; give volatile numbers provenance** (reference.md §6, Update step 5, page
+  template). These are authoring rules, deliberately NOT in the per-session contract: in the A/B below the executor
+  already swept the wiki without them, and wrote new counts without provenance with them.
+- **Contract v3** adds only the index rule (about 20 tokens). **Outdated contracts get refreshed:** lint warns
+  when AGENTS.md carries an older `okf:contract` version than the template; Repair now treats an older marker as
+  outdated (show the diff, refresh with confirmation, keep the repo's own lines) and a same-version difference as a
+  customization. Before this there was no upgrade path, and
+  all four production repos still carry contract v1.
+
+A/B on Claude Sonnet 5.5 (eval case `ship-crosspage`, 8-page wiki, and `ship-crosspage-hard`, 19 pages with the
+status line also on a page not linked from the export page; a normal coding task, no `/okf` in the prompt; 6 runs
+per version per case, alternating batches):
+- dead index entry fixed: 1.3.4 0/12, 1.3.5 12/12. Every run in both versions ran the lint and saw the entry; as a
+  warning it was ignored every time, as an error it was fixed every time (all by marking it `planned`; no page was
+  invented).
+- status lines and counts on the obvious, the linked and the unlinked page: 12/12 in both versions, so the sweep
+  rule showed no lift (ceiling). Counts were rewritten without provenance in both versions.
+- the final 1.3.5 (contract without the sweep sentence) re-run on `ship-crosspage-hard`: 3/3 runs, 9/9 each.
+- cost per run $0.21 vs $0.22; turns unchanged. No-regression pass on 1.3.5: fresh-bootstrap 28/28, update-stale
+  9/9, migrate-legacy-ignored 13/13, repair-drifted 11/11.
+
+Regression suite: 109 → 121.
+
+## 1.3.4 (2026-10-02)
+
+Follow-up from the 1.3.3 live confirmation: update runs edited pages with `sed -i` and committed in the same shell
+command, so a `git status`-based change detector saw a clean tree and skipped them. Change detection is now a stat
+walk over the wiki's pages (raw/ excluded; untracked raw captures still listed via git), so edits are seen whether or
+not they were committed in the same command. With no baseline yet (hooks installed mid-session), the first hook
+run records one silently instead of treating the whole wiki as just written. The auto-log now records only edits that are
+still uncommitted (they ride along with the agent's next commit); an edit already committed in the same command is
+recorded by git and only gets the quality nudges — logging it would leave `log.md` dirty after the agent's last commit,
+which the first 1.3.4 live run did. Regression suite: 105 → 109.
+
+## 1.3.3 (2026-10-02)
+
+Hook-coverage fix from the eval. The current default executor (Claude Sonnet 5.5) wrote wiki pages with shell
+heredocs instead of the Edit/Write tools in every bootstrap and migration run, so the PostToolUse hook (matcher
+`Edit|Write`) never fired while the wiki was being authored: no frontmatter, description or index nudges, no
+auto-log. The hook is now tool-agnostic: it also matches `Bash` (Codex: all tools) and processes every wiki file
+whose state changed since its previous run (one `git status` scoped to the wiki, state in the gitignored
+`.okf/hook-seen.json`, baselined at SessionStart so pre-existing dirt is not re-nudged). Regression suite: 101 → 105.
+
+## 1.3.2 (2026-10-02)
+
+Wiki-quality release, from the eval's rubric judge (8 items over every wiki the eval produced). Two defects
+recurred in every version and are deterministic, so they are now mechanized rather than left to prose:
+
+- **Generic description openers** ("How…", "Why…", "When…", "This page…"): 23–44% of pages in every version.
+  Lint warns, and the PostToolUse hook nudges the model (`additionalContext`) the moment such a page is written.
+- **Index entries that paraphrase instead of reusing the page description**: 12–40% of pages. Lint warns per page;
+  writing an `index.md` that paraphrases triggers a nudge naming the pages.
+- **Premature subdirectories** (house rule: flat until ~7 pages): a newer executor split 4-page wikis into
+  subdirectories in both runs. Lint warns.
+
+Bootstrap step 5 states all three rules inline. Regression suite: 94 → 101.
+
+## 1.3.1 (2026-09-15)
+
+Trigger-tier fix from the eval (20 probes, Haiku executor, skill 1.2.3): should-not-trigger prompts stayed
+quiet 10/10, but only 3/10 should-trigger prompts invoked the skill — "create a knowledge base for agents"
+produced a hand-rolled 1,192-line knowledge base and "is the wiki up to date?" was handled without the
+no-op check. The description now front-loads the maintenance verbs (bootstrap, set up, create, migrate,
+repair, lint, audit, update, up to date) and states that hand-rolling a knowledge base is wrong; the contract
+routes maintenance requests to `/okf`.
+
+Evidence-durability fix from the eval (both 1.2.3 and 1.3.0 left cited ADRs gitignored after fixing a blanket
+`docs/` ignore in the migration case): lint now ERRORS on every cited local file (`[S1] Local: path`, `source:`,
+`resource:`) that is untracked or gitignored (a warning was ignored 3/3 times in the eval), and the migrate flow re-checks cited files with `git check-ignore`
+after any ignore fix. `DECISIONS.md` now counts as agent plumbing (like AGENTS.md and `.okf/`), so a
+decisions-only commit never needs an `Okf-Impact` trailer.
+
+## 1.3.0 (2026-09-09)
+
+Production-evidence release. Driven by transcript mining of every real session (1 Claude, 148 Codex
+threads, 4 repos), an 8-lens adversarial review with reproductions, and a new eval harness with
+planted-fact fixtures. The knowledge model is unchanged; the enforcement
+mechanics were the weak part and are rebuilt.
+
+- **Stop gate closes the commit bypass.** `session-start` records the session base HEAD
+  (`.okf/session-head`, gitignored); `stop-gate` now inspects commits since that base as well as
+  the worktree, so "commit, then stop" no longer passes. Escapes: a wiki page or log entry touched
+  this session, a `no-impact` line **dated today**, or an `Okf-Impact: none` commit trailer.
+  `raw/` captures never satisfy a gate. Prints `{}` on allow (Codex requires JSON).
+- **Anchor advances itself.** New git hooks `post-commit` (stamps when a commit touches the wiki)
+  and `post-rewrite` (follows amend/rebase). `noop-check` reports uncertified *commits* (code
+  touched, no wiki, no marker) instead of hundreds of flat paths; `state-update
+  --from-last-wiki-commit` recovers a clone with no anchor.
+- **Codex hooks.** `templates/hooks-codex.json` + `install-hooks --target codex` install the same
+  three hooks into `.codex/hooks.json`; the PostToolUse hook parses `apply_patch` payloads. Trust
+  them once with `/hooks` in Codex. The "no write-forcing under Codex" claim is gone.
+- **The frontmatter nudge reaches the model.** PostToolUse output is now
+  `hookSpecificOutput.additionalContext` JSON (plain stdout on exit 0 only ever reached the debug
+  log — zero nudges were seen in any production transcript).
+- **Hooks survive real sessions.** All hooks go through the tracked `.okf/okf-py.sh`, which resolves
+  the repo root (subdirectory launches and `/cd` silently disabled every hook), pins uv to a system
+  Python 3 with downloads off (a repo `.python-version` made `uv run` exit 2 = permanent Stop
+  block), and falls back to bare `python3`. `git` timeouts fail closed in the Stop gate.
+- **Auto-log no longer corrupts `log.md`** (entry lands below preamble prose, above the newest entry
+  — the fix a production repo had already made locally); CRLF logs keep CRLF; `msvcrt` lock on
+  Windows; case-insensitive filesystems detected by probe, not `sys.platform` (WSL `/mnt/c`).
+- **Re-runs never clobber.** `.okf/githooks/pre-commit.local` chain point for project gates;
+  `install-hooks` upgrades an older okf entry instead of appending, honors `hooksDisabled` in
+  config, writes atomically, backs up under `.okf/`; contract marker bumped to v2.
+- **OKF v0.2 tolerance.** Nested `sources:`/`generated:`/`verified:` parse; `status:
+  draft|stable|deprecated` accepted alongside the legacy set; a passed `stale_after` warns; `raw/`
+  excluded from the wiki hash. Full v0.2 migration (`migrate-v02`, stamping) is 1.4.0.
+- Lint lists untracked raw captures by name; pre-commit warns when synthesis is committed while its
+  captures are untracked; `wikiDir` validated against shell-safe names; `--help` prints usage and
+  unknown subcommands exit 2 instead of silently linting.
+- SKILL.md: CLAUDE.md defaults to an `@AGENTS.md` import (symlink opt-in — Windows clones turned the
+  symlink into a one-word file); trust boundary stated; fresh-clone and Codex sentences corrected;
+  13 contradictions fixed; length held under 18 KB despite the additions. Regression suite: 58 → 90 assertions, green on Linux.
+
 ## 1.2.3 (2026-07-11)
 
 Day-3 refinements from two production repos:

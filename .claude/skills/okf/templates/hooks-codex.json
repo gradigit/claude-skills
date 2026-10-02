@@ -1,0 +1,42 @@
+{
+  "description": "okf knowledge-base hooks (same three as .claude/settings.json). Trust them once with /hooks in Codex.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" session-start;  fi",
+            "timeout": 10,
+            "statusMessage": "okf: session pointer"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" hook;  fi",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" stop-gate; else echo '{}'; fi",
+            "timeout": 20,
+            "statusMessage": "okf: stop gate"
+          }
+        ]
+      }
+    ]
+  }
+}

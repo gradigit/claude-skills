@@ -16,7 +16,8 @@ sentences, front-loading the distinguishing terms.>
 ## <Section as needed>
 
 <Prose. Link related pages with relative paths: [sibling concept](../topic/sibling.md).
-Cite claims inline with [S1] markers. Mark uncertain claims UNVERIFIED.>
+Cite claims inline with [S1] markers. Mark uncertain claims UNVERIFIED. Write exact counts,
+ranges and versions with the commit/date they were true at or the command that reproduces them.>
 
 ## Related
 - [<Sibling page>](./sibling.md) — why it's related
@@ -30,4 +31,7 @@ Cite claims inline with [S1] markers. Mark uncertain claims UNVERIFIED.>
        method | case-study | asset | idea | hypothesis | evidence | index
      description: REQUIRED, single line, no folded scalars (> or |)
      status: verified | unverified | draft  — flip from draft when sourced
+     OKF v0.2 forms are equally accepted: generated: { by: <actor>, at: <ISO datetime+offset> },
+       status: draft | stable | deprecated, verified: [{ by, at }], stale_after: <datetime>,
+       sources: [{ id, resource, title }] with [^id] footnotes instead of [S1] + ## Sources
      Replace every <placeholder>; lint errors on any left behind. -->

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Regression suite for okf_lint.py v1.1 — one assertion per reproduced panel finding."""
 import json, os, shutil, subprocess, sys, tempfile
+from datetime import date
 
 # resolve relative to this file so the suite survives copies/publishes of the skill dir
 LINT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "okf_lint.py")
@@ -197,12 +198,15 @@ sh(d, "git", "add", "-A")
 code, out = lint(d, "noop-check")
 check("unicode path readable in noop-check", "日本語" in out and "\\346" not in out, out)
 
-# ── R2-26. hook case-insensitive containment (breaker r2 #4, macOS APFS)
+# ── R2-26. hook case-insensitive containment — decided by a filesystem probe, never by sys.platform
+# (macOS APFS and NTFS are case-insensitive; so is WSL /mnt/c under linux; ext4 is not)
 d = mkrepo("caseins")
+probe_ci = os.path.exists(os.path.join(d, "WIKI", "concepts", "good.md"))
 payload = json.dumps({"tool_input": {"file_path": os.path.join(d, "WIKI", "concepts", "good.md")}})
 code, out = lint(d, "hook", stdin=payload)
 logtxt = open(os.path.join(d, "wiki/log.md")).read()
-check("case-different path still logged", "auto | session edits" in logtxt and "concepts/good.md" in logtxt, logtxt)
+logged = "auto | session edits" in logtxt and "concepts/good.md" in logtxt
+check("case-different path logged iff the filesystem is case-insensitive", logged == probe_ci, "probe_ci=%s logged=%s" % (probe_ci, logged))
 
 # ── RA-28. pre-commit git guard fires on code-only commits too (req-audit-v2 gap 1)
 d = mkrepo("guardalways", wiki="docs/llm-wiki", commit=False)
@@ -232,6 +236,7 @@ check("placeholders -> error", code == 1 and "placeholder" in out, out)
 # ── 18. headerless log append creates header (breaker #14)
 d = mkrepo("logheader")
 w(d, "wiki/log.md", "some legacy freeform line\n")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read() + "\nEdited.\n")  # a real (uncommitted) edit
 payload = json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/good.md")}})
 code, out = lint(d, "hook", stdin=payload)
 logtxt = open(os.path.join(d, "wiki/log.md")).read()
@@ -304,7 +309,8 @@ check("missing configured wikiDir errors loudly", code == 1 and "NOT falling bac
 d = mkrepo("graphdelete")
 sh(d, "git", "rm", "-q", "wiki/concepts/good.md")
 code, out = lint(d, "pre-commit")
-check("staged wiki deletion surfaces graph warning", "graph check" in out and "good.md" in out, "code=%s %s" % (code, out))
+# 1.3.5: the index still lists the deleted page, so this is now a blocking error, not a graph warning
+check("staged wiki deletion that leaves its index entry is blocked", code == 1 and "good.md" in out and "index entry" in out, "code=%s %s" % (code, out))
 
 # ── R3-34. inline frontmatter comment now warns (codex-v2 #7)
 d = mkrepo("inlinewarn")
@@ -324,6 +330,314 @@ w(d, ".gitignore", ".DS_Store\nwiki/concepts/real-page.md\n")
 w(d, "wiki/concepts/real-page.md", "---\ntype: concept\ntitle: R\ndescription: A real knowledge page that got gitignored and must still be flagged.\n---\n# R\nBody long enough to clear thin threshold in the junk-exclusion regression case.\n")
 code, out = lint(d, "lint")
 check("gitignored real .md still errors", code == 1 and "gitignored" in out, out)
+
+
+# ═══════════════════════════════════════ 1.3.0 — production-driven mechanics
+def _head(d):
+    return sh(d, "git", "rev-parse", "HEAD")[1].strip()
+
+def _commit(d, msg, *extra):
+    sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-q", "-m", msg, *extra)
+
+# ── 130-1. Stop gate: committing code no longer bypasses it (session base from session-start)
+d = mkrepo("gatecommit")
+code, out = lint(d, "session-start", stdin='{"source":"startup"}')
+check("session-start prints the pointer and records the session base", "OKF knowledge base active" in out and os.path.isfile(os.path.join(d, ".okf/session-head")), out)
+w(d, "src/app.py", "x=1"); _commit(d, "code only")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("commit-then-stop is BLOCKED (exit 2)", code == 2 and "committed" in out, "code=%s %s" % (code, out[:120]))
+w(d, "wiki/raw/capture.json", "{}")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("a raw/ capture alone does not satisfy the gate", code == 2, "code=%s" % code)
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read() + "\nUpdated after the code change.\n")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("touching a wiki page this session allows the stop and prints {}", code == 0 and out.strip() == "{}", "code=%s %s" % (code, out))
+
+# ── 130-2. no-impact escape must be dated today; an Okf-Impact trailer also certifies
+d = mkrepo("gatehatch")
+w(d, "wiki/log.md", "# log\n\n## [2020-01-01] no-impact | ancient\n"); _commit(d, "old log")
+lint(d, "session-start", stdin='{"source":"startup"}')
+w(d, "src/app.py", "x=1"); _commit(d, "code")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("a no-impact line from a past day does not excuse today's code", code == 2, "code=%s" % code)
+w(d, "wiki/log.md", "# log\n\n## [%s] no-impact | plumbing only\n" % date.today().isoformat()); _commit(d, "log today")
+lint(d, "session-start", stdin='{"source":"startup"}')
+w(d, "src/app2.py", "y=2"); _commit(d, "code 2")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("a committed no-impact line dated today excuses this session's code commit", code == 0 and out.strip() == "{}", "code=%s %s" % (code, out[:100]))
+lint(d, "session-start", stdin='{"source":"startup"}')
+w(d, "src/app3.py", "z=3"); _commit(d, "chore", "-m", "Okf-Impact: none")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("an Okf-Impact: none trailer certifies a code commit", code == 0, "code=%s %s" % (code, out[:100]))
+code, out = lint(d, "stop-gate", stdin='{"stop_hook_active": true}')
+check("stop_hook_active short-circuits with {}", code == 0 and out.strip() == "{}", out)
+
+# ── 130-3. noop-check reports uncertified COMMITS, and excludes commits that carried their wiki update
+d = mkrepo("percommit")
+lint(d, "state-update")
+for i in range(3):
+    w(d, "src/f%d.py" % i, "x=%d" % i); _commit(d, "code %d" % i)
+w(d, "wiki/index.md", "# INDEX\n## Sections\n* [concepts](concepts/index.md) — core topics\n"); _commit(d, "wiki nav")
+code, out = lint(d, "noop-check")
+check("noop-check lists 3 uncertified commits, not flat paths", "3 uncertified commit(s)" in out and out.count("  commit ") == 3 and "changed:" not in out, out)
+d = mkrepo("certified")
+lint(d, "state-update")
+w(d, "src/a.py", "x"); w(d, "wiki/index.md", "# INDEX\n## Sections\n* [concepts](concepts/index.md) — core!\n"); _commit(d, "mixed")
+code, out = lint(d, "noop-check")
+check("a commit that touched code AND wiki is certified -> CURRENT", "CURRENT" in out, out)
+w(d, "src/b.py", "y"); _commit(d, "code", "-m", "Okf-Impact: none")
+code, out = lint(d, "noop-check")
+check("an Okf-Impact: none commit is certified -> CURRENT", "CURRENT" in out, out)
+
+# ── 130-4. post-commit advances the anchor only for wiki-touching commits; post-rewrite follows amends
+d = mkrepo("postcommit")
+w(d, ".gitignore", ".okf/last-update.json\n")   # as at bootstrap: per-clone state is never tracked
+lint(d, "state-update")
+w(d, "src/a.py", "x"); w(d, "wiki/index.md", "# INDEX\n## Sections\n* [concepts](concepts/index.md) — core?\n"); _commit(d, "mixed")
+lint(d, "post-commit")
+st = json.load(open(os.path.join(d, ".okf/last-update.json")))
+head = _head(d)
+check("post-commit stamps HEAD when the commit touched the wiki", st["gitHead"] == head and "--auto" in st["command"], json.dumps(st))
+w(d, "src/b.py", "y"); _commit(d, "code only")
+lint(d, "post-commit")
+st2 = json.load(open(os.path.join(d, ".okf/last-update.json")))
+check("post-commit leaves the anchor alone for code-only commits", st2["gitHead"] == head, st2["gitHead"][:8])
+sh(d, "git", "reset", "-q", "--hard", head)
+sh(d, "git", "commit", "-q", "--amend", "-m", "mixed (amended)")
+new = _head(d)
+code, out = lint(d, "post-rewrite", stdin="%s %s\n" % (head, new))
+st3 = json.load(open(os.path.join(d, ".okf/last-update.json")))
+check("post-rewrite remaps a rewritten anchor", st3["gitHead"] == new and "remapped" in out, out)
+code, out = lint(d, "noop-check")
+check("after the remap noop-check is CURRENT, not STALE-forever", "CURRENT" in out, out)
+d = mkrepo("fromlastwiki")
+first = _head(d)
+w(d, "src/a.py", "x"); _commit(d, "code")
+lint(d, "state-update", "--from-last-wiki-commit")
+st = json.load(open(os.path.join(d, ".okf/last-update.json")))
+check("state-update --from-last-wiki-commit anchors to the last wiki-touching commit", st["gitHead"] == first, st["gitHead"][:8] + " vs " + first[:8])
+
+# ── 130-5. PostToolUse hook: Codex apply_patch payloads, additionalContext nudge, raw capture note
+d = mkrepo("codexpatch")
+patch = "*** Begin Patch\n*** Update File: wiki/concepts/good.md\n@@\n-Retries\n+Retries!\n*** End Patch\n"
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read().replace("Retries", "Retries!", 1))  # apply it
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "apply_patch", "tool_input": {"command": patch}}))
+logtxt = open(os.path.join(d, "wiki/log.md")).read()
+check("Codex apply_patch payload auto-logs the edited page", code == 0 and "concepts/good.md" in logtxt, logtxt)
+w(d, "wiki/concepts/nofm.md", "# no frontmatter\nbody\n")
+code, out = lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/nofm.md")}}))
+check("missing-frontmatter nudge is emitted as additionalContext JSON (reaches the model)", '"additionalContext"' in out and "missing frontmatter" in out, out)
+code, out = lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/good.md")}}))
+check("a well-formed page edit emits no stdout (silent auto-log)", code == 0 and out.strip() == "", out)
+w(d, "wiki/raw/cap.json", "{}")
+code, out = lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/raw/cap.json")}}))
+check("a raw/ capture write gets a git-add reminder", "git add" in out, out)
+
+# ── 130-6. auto-log lands below preamble prose and above the newest entry; CRLF preserved
+d = mkrepo("preamble")
+w(d, "wiki/log.md", "# Log\n\nNewest first. Conventions live here.\n\n## [2026-07-01] ingest | Bootstrap\nBody.\n")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read() + "\nEdited.\n")  # a real (uncommitted) edit
+lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/good.md")}}))
+logtxt = open(os.path.join(d, "wiki/log.md")).read()
+check("auto entry sits below the preamble and above the newest entry",
+      logtxt.index("Conventions live here.") < logtxt.index("auto | session edits") < logtxt.index("## [2026-07-01]"), logtxt)
+d = mkrepo("crlf")
+open(os.path.join(d, "wiki/log.md"), "wb").write(b"# log\r\n\r\n## [2026-07-01] ingest | x\r\nBody.\r\n")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read() + "\nEdited.\n")  # a real (uncommitted) edit
+lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/good.md")}}))
+raw = open(os.path.join(d, "wiki/log.md"), "rb").read()
+check("CRLF log keeps CRLF line endings after the auto-log", b"\r\n" in raw and b"\n" not in raw.replace(b"\r\n", b""), repr(raw[:80]))
+
+# ── 130-7. install-hooks: upgrades older okf entries, honors hooksDisabled, backs up under .okf/, codex target
+d = mkrepo("hooksupgrade")
+w(d, ".okf/frag-old.json", json.dumps({"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "if [ -f .okf/lint.py ]; then python3 .okf/lint.py stop-gate; fi"}]}]}}))
+lint(d, "install-hooks", ".okf/frag-old.json")
+newfrag = {"hooks": {"Stop": [{"hooks": [{"type": "command", "command": "f=\"$(git rev-parse --show-toplevel)/.okf/okf-py.sh\"; sh \"$f\" stop-gate"}]}],
+                     "PostToolUse": [{"matcher": "Edit|Write", "hooks": [{"type": "command", "command": "sh .okf/okf-py.sh hook"}]}]}}
+w(d, ".okf/frag-new.json", json.dumps(newfrag))
+lint(d, "install-hooks", ".okf/frag-new.json")
+sj = json.load(open(os.path.join(d, ".claude/settings.json")))
+stop = sj["hooks"]["Stop"]
+check("install-hooks upgrades an older okf entry instead of appending a second one", len(stop) == 1 and "okf-py.sh" in stop[0]["hooks"][0]["command"], json.dumps(stop))
+check("settings backup lands under .okf/, not next to the tracked file", os.path.isfile(os.path.join(d, ".okf/settings.json.bak")) and not os.path.exists(os.path.join(d, ".claude/settings.json.bak")), "")
+w(d, ".okf/config.json", json.dumps({"wikiDir": "wiki", "hooksDisabled": ["Stop"]}))
+lint(d, "install-hooks", ".okf/frag-new.json")
+sj = json.load(open(os.path.join(d, ".claude/settings.json")))
+check("hooksDisabled keeps a deliberately removed Stop gate out on re-install", "Stop" not in sj["hooks"] and "PostToolUse" in sj["hooks"], json.dumps(sj["hooks"]))
+w(d, ".okf/config.json", json.dumps({"wikiDir": "wiki"}))
+code, out = lint(d, "install-hooks", ".okf/frag-new.json", "--target", "codex")
+cj = json.load(open(os.path.join(d, ".codex/hooks.json")))
+check("install-hooks --target codex writes .codex/hooks.json with the same events", code == 0 and "Stop" in cj["hooks"] and "PostToolUse" in cj["hooks"], out)
+
+# ── 130-8. OKF v0.2 shapes are accepted; passed stale_after warns; hostile wikiDir rejected; help/unknown exit codes
+d = mkrepo("v02")
+w(d, "wiki/concepts/v2.md", "---\ntype: reference\ntitle: V2 page\ndescription: An OKF v0.2 shaped page with nested sources and a passed stale_after value.\nstatus: stable\ngenerated: { by: human:t, at: 2026-06-01T00:00:00Z }\nstale_after: 2020-01-01T00:00:00Z\nsources:\n  - id: s1\n    resource: src/x.py\n---\n# V2\nBody long enough to clear the thin threshold for this v0.2 conformance regression case.\n")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [V2](v2.md) — v0.2 shaped page.\n")
+code, out = lint(d, "lint")
+check("v0.2 nested sources satisfy citation presence", "v2.md: no 'source:'" not in out, out)
+check("v0.2 status 'stable' is accepted without a warning", "status 'stable'" not in out, out)
+check("a passed stale_after produces a rot warning", "v2.md: stale_after" in out and "has passed" in out, out)
+w(d, ".okf/config.json", json.dumps({"wikiDir": "my wiki"}))
+code, out = lint(d, "lint")
+check("a wikiDir that would break shell interpolation is rejected loudly", code == 1 and "NOT falling back" in out, out)
+w(d, ".okf/config.json", json.dumps({"wikiDir": "wiki"}))
+code, out = lint(d, "--help")
+check("--help prints usage and exits 0 (never runs lint)", code == 0 and "usage" in out and "okf-lint 1" not in out, out[:100])
+code, out = lint(d, "bogus")
+check("unknown subcommand exits 2 with usage", code == 2 and "unknown subcommand" in out, out[:100])
+
+
+# ── 131-1. cited local evidence that is untracked or gitignored is flagged
+d = mkrepo("citeduntracked")
+w(d, "docs/adr/0001.md", "# ADR 1\nDecision text.\n")
+w(d, "wiki/concepts/adr.md", "---\ntype: decision\ntitle: ADR one\ndescription: Why the ADR-0001 decision was taken and what it constrains for the client.\n---\n# ADR one\nBody long enough to clear the thin threshold for this cited-evidence durability regression.\n## Sources\n[S1] Local: docs/adr/0001.md\n")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [ADR](adr.md) — ADR one.\n")
+code, out = lint(d, "lint")
+check("untracked cited local file -> durability ERROR (exit 1)", code == 1 and "cites local evidence 'docs/adr/0001.md' that is untracked" in out, "code=%s %s" % (code, out))
+w(d, ".gitignore", "docs/\n")
+code, out = lint(d, "lint")
+check("gitignored cited local file -> durability error names the cause", code == 1 and "that is gitignored" in out, "code=%s %s" % (code, out))
+sh(d, "git", "add", "-f", "docs/adr/0001.md"); sh(d, "git", "commit", "-qm", "track adr")
+code, out = lint(d, "lint")
+check("tracked cited file -> no durability error", code == 0 and "cites local evidence" not in out, "code=%s %s" % (code, out))
+
+
+# ── 131-2. DECISIONS.md is agent plumbing: a decisions-only commit is never uncertified
+d = mkrepo("decisionsonly")
+lint(d, "state-update")
+w(d, "DECISIONS.md", "# Decisions\n- routed hooks to core.hooksPath\n"); _commit(d, "chore: record decisions")
+code, out = lint(d, "noop-check")
+check("DECISIONS.md-only commit -> CURRENT", "CURRENT" in out, out)
+
+
+# ── 132-1. description quality: generic openers warned in lint AND nudged at write time
+d = mkrepo("genericdesc")
+w(d, "wiki/concepts/how.md", "---\ntype: method\ntitle: Retry how\ndescription: How the client retries after a 429 from the frobnicator API.\n---\n# How\nBody long enough to clear the thin-page threshold for this description-quality regression case.\n## Sources\n[S1] Local: src/frob.py\n")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [How](how.md) — How the client retries after a 429 from the frobnicator API.\n")
+code, out = lint(d, "lint")
+check("generic description opener -> lint warning", "how.md: description opens with the generic word 'How'" in out, out)
+code, out = lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/how.md")}}))
+check("generic description opener -> write-time additionalContext nudge", '"additionalContext"' in out and "generic word" in out, out)
+
+# ── 132-2. index entries must reuse the page description verbatim (lint + nudge when the index is written)
+d = mkrepo("indexreuse")
+code, out = lint(d, "lint")
+check("index paraphrasing the description -> lint warning", "concepts/good.md: its index.md entry does not reuse" in out, out)
+code, out = lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/index.md")}}))
+check("writing a paraphrasing index.md -> nudge naming the page", '"additionalContext"' in out and "concepts/good.md" in out, out)
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — Exponential backoff and 429 handling rules for the frobnicator client.\n")
+code, out = lint(d, "lint")
+check("verbatim index entry -> no reuse warning", "does not reuse" not in out, out)
+code, out = lint(d, "hook", stdin=json.dumps({"tool_input": {"file_path": os.path.join(d, "wiki/concepts/index.md")}}))
+check("writing a correct index.md -> silent", out.strip() == "", out)
+
+# ── 132-3. premature subdirectories warned
+d = mkrepo("prematuresub")
+code, out = lint(d, "lint")
+check("1 leaf page in a subdirectory -> premature-structure warning", "keep a flat wiki until ~7 pages" in out, out)
+
+
+# ── 133-1. the PostToolUse hook sees wiki pages written by a SHELL command (heredoc), not only Edit/Write
+d = mkrepo("bashwrite")
+lint(d, "session-start", stdin='{"source":"startup"}')
+w(d, "wiki/concepts/shell.md", "---\ntype: method\ntitle: Shell page\ndescription: How the shell writes pages without the Write tool at all.\n---\n# Shell\nBody long enough to clear the thin threshold for this shell-written page regression case.\n## Sources\n[S1] Local: src/frob.py\n")
+bash_payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": "cat > wiki/concepts/shell.md <<'EOF' ... EOF"}})
+code, out = lint(d, "hook", stdin=bash_payload)
+logtxt = open(os.path.join(d, "wiki/log.md")).read()
+check("shell-written page is auto-logged", "concepts/shell.md" in logtxt, logtxt)
+check("shell-written page with a generic opener gets the write-time nudge", '"additionalContext"' in out and "shell.md" in out and "generic word" in out, out)
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}}))
+check("an unrelated shell command after it is silent (no re-nudge)", out.strip() == "", out)
+d = mkrepo("bashbaseline")
+w(d, "wiki/concepts/predirty.md", "---\ntype: method\ntitle: Pre\ndescription: How a page dirty before the session should not be re-nudged at all.\n---\n# Pre\nBody long enough to clear the thin threshold for this baseline regression case here.\n")
+lint(d, "session-start", stdin='{"source":"startup"}')
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "git status"}}))
+check("files already dirty at session start are baselined, not nudged on the first shell command", "predirty" not in out, out)
+
+
+# ── 134-1. a page edited AND committed inside one shell command is still seen (stat walk, not git status)
+d = mkrepo("samecmdcommit")
+lint(d, "session-start", stdin='{"source":"startup"}')
+import time as _t; _t.sleep(0.05)
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read().replace("five attempts", "six attempts").replace("description: Exponential", "description: How exponential"))
+sh(d, "git", "commit", "-qam", "edit and commit in one go")
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "sed -i ... && git commit -am x"}}))
+check("edit+commit in one shell command is still SEEN (quality nudge delivered)", "generic word" in out and "good.md" in out, out)
+st = sh(d, "git", "status", "--porcelain", "--", "wiki")[1]  # .okf/hook-seen.json is gitignored at bootstrap
+check("...but not auto-logged, so the wiki stays clean after the agent's commit", st.strip() == "", st)
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read().replace("six attempts", "seven attempts"))
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "sed -i ..."}}))
+logtxt = open(os.path.join(d, "wiki/log.md")).read()
+check("an uncommitted shell edit is auto-logged (rides along with the next commit)", "concepts/good.md" in logtxt, logtxt)
+
+
+# ── 134-2. no baseline -> the first hook run records one silently instead of logging every page
+d = mkrepo("nobaseline")
+for i in range(5):
+    w(d, "wiki/concepts/p%d.md" % i, "---\ntype: concept\ntitle: P%d\ndescription: How page %d would be nudged if the baseline were missing.\n---\n# P\nBody text long enough to clear the thin-page threshold for the baseline regression.\n" % (i, i))
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "pages")
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "ls"}}))
+logtxt = open(os.path.join(d, "wiki/log.md")).read()
+check("first hook run without a baseline is silent and logs nothing", out.strip() == "" and "auto | session edits" not in logtxt, out + logtxt)
+
+
+# ── 135. index entries must point at pages that exist (1.3.5, production audit 2026-10: a never-written page
+#        stayed listed in an index for two months under the old forward-link warning)
+d = mkrepo("deadindex")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [Runbook](runbook.md) — Recovery steps when the frobnicator stalls.\n")
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "dead entry")
+code, out = lint(d, "lint")
+check("index entry for a missing page is a lint ERROR", code == 1 and "index entry links to 'runbook.md'" in out, "code=%s %s" % (code, out))
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [Runbook](runbook.md) — planned: recovery steps when the frobnicator stalls.\n")
+code, out = lint(d, "lint")
+check("a line that says 'planned' downgrades it to a warning", code == 0 and "planned page 'runbook.md'" in out, "code=%s %s" % (code, out))
+d = mkrepo("bodyforward")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read().replace("per the client spec [S1].", "per the client spec [S1]. See [jitter](jitter.md)."))
+code, out = lint(d, "lint")
+check("a forward link inside a page body stays a warning", code == 0 and "forward/broken link 'jitter.md'" in out, "code=%s %s" % (code, out))
+d = mkrepo("outsideindex")
+w(d, "wiki/index.md", "# INDEX\n## Sections\n* [concepts](concepts/index.md) — core\n* [Readme](../README.md) — repo readme\n* [Retry rules](concepts/good.md#frob) — anchor link\n")
+code, out = lint(d, "lint")
+check("index links outside the wiki and #anchors to existing pages are not flagged", code == 0 and "index entry" not in out, "code=%s %s" % (code, out))
+
+d = mkrepo("deadindexcommit")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [Runbook](runbook.md) — Recovery steps when the frobnicator stalls.\n")
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "drift under an older lint", "--no-verify")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read().replace("five attempts", "six attempts"))
+sh(d, "git", "add", "wiki/concepts/good.md")
+code, out = lint(d, "pre-commit")
+check("pre-commit blocks a wiki commit while an index lists a missing page", code == 1 and "runbook.md" in out and "index entry" in out, "code=%s %s" % (code, out))
+sh(d, "git", "reset", "-q")
+w(d, "src.py", "x = 1\n"); sh(d, "git", "add", "src.py")
+code, out = lint(d, "pre-commit")
+check("...but a code-only commit is not blocked by it", code == 0, "code=%s %s" % (code, out))
+sh(d, "git", "reset", "-q")
+w(d, "wiki/concepts/runbook.md", "---\ntype: method\ntitle: Frobnicator runbook\ndescription: Recovery steps when the frobnicator stalls.\n---\n# Runbook\nRestart the frobnicator worker, then replay the queue from the last acknowledged offset [S1].\n## Sources\n[S1] Local: src.py\n")
+sh(d, "git", "add", "wiki/concepts/good.md")
+code, out = lint(d, "pre-commit")
+check("pre-commit checks the commit, not the disk (page written but not staged is still missing)", code == 1 and "runbook.md" in out, "code=%s %s" % (code, out))
+sh(d, "git", "add", "wiki/concepts/runbook.md", "src.py")
+code, out = lint(d, "pre-commit")
+check("staging the page with the entry passes", code == 0, "code=%s %s" % (code, out))
+
+d = mkrepo("deadindexhook")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [Runbook](runbook.md) — Recovery steps when the frobnicator stalls.\n")
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "drift", "--no-verify")
+lint(d, "session-start", stdin='{"source":"startup"}')
+import time as _t2; _t2.sleep(0.05)
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read().replace("five attempts", "six attempts"))
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Bash", "tool_input": {"command": "sed -i ..."}}))
+check("write-time hook names index entries for missing pages", '"additionalContext"' in out and "runbook.md" in out and "do not exist" in out, out)
+code, out = lint(d, "hook", stdin=json.dumps({"tool_name": "Edit", "tool_input": {"file_path": os.path.join(d, "src.py")}}))
+check("...but stays silent when the session did not touch the wiki", "runbook.md" not in out, out)
+
+d = mkrepo("contractver")
+w(d, "AGENTS.md", "# A\n<!-- okf:contract v2 -->\n## Knowledge base\n<!-- /okf:contract v2 -->\n")
+code, out = lint(d, "lint")
+check("lint warns when AGENTS.md carries an older okf contract", "contract v2" in out and "run /okf" in out, out)
+w(d, "AGENTS.md", "# A\n<!-- okf:contract v3 -->\n## Knowledge base\n<!-- /okf:contract v3 -->\n")
+code, out = lint(d, "lint")
+check("...and is quiet at the current contract version", "contract v" not in out, out)
 
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

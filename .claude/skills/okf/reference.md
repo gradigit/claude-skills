@@ -35,6 +35,12 @@ Field rules (`type`, `title`, `description` REQUIRED; the rest optional):
 - `status: verified | unverified | draft` — flip from `draft` once sourced.
 - Reserved files (`index.md`, `README.md`, `log.md`, `hypotheses.md`,
   `evidence-matrix.md`, `_plan.md`) are exempt from leaf-page frontmatter requirements.
+- **OKF v0.2 (2026-07) shapes are accepted** alongside the legacy ones above: `generated: { by, at }`
+  (supersedes `timestamp`), nested `sources:` lists with `[^id]` footnotes (supersede `source:` +
+  `## Sources`), `verified: [{ by, at }]`, `status: draft | stable | deprecated`, and `stale_after`
+  (a passed value is a lint warning). Prefer v0.2 fields on new pages; lint never errors on either.
+  Declared divergences from the spec: internal links stay relative (bundle-absolute `/x.md` breaks
+  renderers — OKF #48/#157) and `raw/` is the capture dir (spec convention: `references/`).
 
 ## 2. Granularity — one answerable unit per file
 
@@ -70,14 +76,19 @@ Read-first catalog; the reason agents navigate without retrieval infra. One line
 entry: `[Title](file.md) — description` (reuse the page's own description). Dirs of
 dirs list `## Sections`; dirs of leaves list `## Pages`. Update the index in the same
 change as any page add/remove. Root index stays ≤200 lines; push detail down.
+An index entry asserts that the page exists: lint ERRORS on an entry whose page is missing,
+and the pre-commit hook refuses a wiki commit that contains one. A page you mean to write
+later goes on a line that says `planned` (lint then only warns). Production: an index listed
+a never-written page for two months while the old warning was ignored.
 
 ## 5. Linking — relative paths build the graph
 
 - Internal links are ALWAYS relative markdown paths. Never absolute paths (broken
   rendering — OKF issues #48/#157), never external URLs for internal concepts, never
   `[[wikilinks]]`.
-- Forward links to not-yet-written pages are sanctioned (they mark gaps); lint warns
-  so they eventually get written.
+- Forward links to not-yet-written pages are sanctioned inside page bodies (they mark
+  gaps); lint warns so they eventually get written. In an `index.md` they must say
+  `planned` (§4).
 - No orphans: every page gets an inbound link from its `index.md` at minimum
   (⚖ log.md mentions don't count — the lint checks the real navigation graph).
 - **Rename = rewrite all inbound links in the same change** (path-as-identity breaks
@@ -96,6 +107,23 @@ change as any page add/remove. Root index stays ≤200 lines; push detail down.
   synthesis ("did you actually save every piece?" is the recurring failure).
 - Contradictions resolve recency-wins: newest verified evidence supersedes; note the
   supersession on the page and in `log.md`.
+- **Volatile facts carry their provenance.** An exact count, range, size or version
+  ("63 items", "30,400–44,272 ticks", "schema v2") is written with the commit or date it
+  was true at, or the command that reproduces it ("69 items in `data/items.json` as of
+  commit a1b2c3d", "`python3 tools/count_items.py`"). Otherwise state it qualitatively. A
+  reader can then re-check it instead of trusting it.
+- **Status lines are claims about the present.** "Open blocker", "not supported",
+  "refused", "out of scope", "gate unmet" go stale the moment the work lands. When a
+  change resolves or alters one, or changes a count, grep the whole wiki for the feature
+  name and the old value and fix every page that states it, not only the page you are
+  editing. Evidence: the 2026-10 production audit (4 repos, 600 claims checked against
+  the code) found 4.3% of checkable claims wrong, almost all exact numbers or status
+  lines. One commit implemented a feature and updated that feature's page, but left
+  "<feature> stays refused" and an old count on a design page nobody reopened.
+  Eval note (2026-10-03, Claude Sonnet 5.5): with or without these two rules the executor
+  swept a 19-page wiki and fixed an unlinked status line 12/12, and it wrote new counts
+  without provenance either way. They stay here as authoring rules, not in the per-session
+  contract, until an eval shows they change behaviour.
 
 ## 7. Retrieval — files + grep + index.md ⚖
 
@@ -126,13 +154,21 @@ Honesty notes (from the adversarial review):
 - **No-op short-circuit**: `python3 .okf/lint.py noop-check` before any update pass.
   ⚖ It fails toward STALE on every git uncertainty (rebased anchors, renames,
   zero-commit repos) — a false "CURRENT" was the worst defect the panel found in v1.0.
+  Since 1.3.0 it reports *uncertified commits* (code touched, wiki untouched, no
+  `[no-impact]` subject or `Okf-Impact: none` trailer), not flat paths: in production the
+  anchor had frozen at bootstrap in 3 of 4 repos and the flat list reached 285 paths.
+- **The anchor advances itself**: the `post-commit` git hook stamps when a commit touches
+  the wiki; `post-rewrite` follows amends and rebases; a fresh clone anchors with
+  `state-update --from-last-wiki-commit`. `--mark-reviewed` remains for reviewed no-impact diffs.
 - **State stamps are churn-guarded**: `state-update` refuses to rewrite when the wiki
-  hash is unchanged; ⚖ `state-update --mark-reviewed` advances the anchor after a
-  reviewed no-doc-impact diff (otherwise the same diff re-reviews forever).
-- **log.md**: auto-entries (`auto |`) come from the Claude PostToolUse hook — leaf
-  wiki pages only, lock-guarded, one dated block per day. Hand entries are for
-  meaningful events (`ingest | decision | migration | no-impact`), newest first,
-  greppable. Under hookless agents (Codex), append hand entries yourself.
+  hash is unchanged (the hash excludes `raw/`); `--mark-reviewed` advances the anchor after a
+  reviewed no-doc-impact diff; `--auto` is what the post-commit hook uses.
+- **log.md**: auto-entries (`auto |`) come from the PostToolUse hook (Claude Code and Codex)
+  — leaf wiki pages only, lock-guarded, one dated block per day, inserted below any preamble
+  prose and above the newest entry. Hand entries are for meaningful events (`ingest |
+  decision | migration | no-impact`), newest first, greppable. A `no-impact` line only
+  excuses the Stop gate when dated today (production showed stale and shipped-feature
+  no-impact lines; 21% of one repo's log). Under hookless agents, append hand entries yourself.
 - **Single writer**: orchestrator writes the wiki; subagents inspect and report only.
 - **Plan-then-delete**: `_plan.md` during bootstrap/big ingests; deleted before done.
 
@@ -141,10 +177,10 @@ Honesty notes (from the adversarial review):
 | Layer | What it actually does | Fires | Platform |
 |---|---|---|---|
 | **Structure guard** — `.okf/lint.py` | well-formedness + rot signals (never knowledge quality) | on demand, hooks, pre-commit, CI | any |
-| **Structure guard at commit** — git pre-commit (`.okf/githooks/`) | blocks malformed STAGED wiki pages; WARNS (never blocks) on code-without-wiki commits — a nudge, not forcing | every commit, any agent or human | any (git) |
+| **Structure guard at commit** — git pre-commit (`.okf/githooks/`) | blocks malformed STAGED wiki pages and wiki commits whose `index.md` lists a page not in the commit; WARNS (never blocks) on code-without-wiki commits — a nudge, not forcing | every commit, any agent or human | any (git) |
 | **Structure guard at merge** — CI lint (`ci-okf-lint.yml`) | the same `lint` at PR time; catches malformed pages on fresh clones — it cannot detect a skipped write | PR/push | any (CI) |
-| **Write-forcing** — Stop gate (`lint.py stop-gate`, default) | the ONLY layer that blocks on code-changed-without-wiki-update; `no-impact` log line is the deliberate escape; honors `stop_hook_active` (8-block cap is platform behavior) | deterministic, zero tokens | Claude Code |
-| **Accelerators** — SessionStart pointer, PostToolUse quick-lint + auto-log | re-inject context; catch frontmatter slips at write time | deterministic | Claude Code |
+| **Write-forcing** — Stop gate (`lint.py stop-gate`, default) | blocks on code changed THIS SESSION (uncommitted or committed since the SessionStart base) without a wiki page or log entry; escapes: a `no-impact` line dated today or an `Okf-Impact: none` trailer; `raw/` never counts; honors `stop_hook_active` (8-block cap is platform behavior); fails closed on a git timeout | deterministic, zero tokens | Claude Code + Codex |
+| **Accelerators** — SessionStart pointer (records the session base), PostToolUse quick-lint (via `additionalContext`, the only PostToolUse output that reaches the model) + auto-log, fired for wiki files written by ANY tool including shell heredocs, post-commit anchor stamp | re-inject context; catch frontmatter slips at write time; keep the anchor current | deterministic | Claude Code + Codex (git hooks: any) |
 | **Guidance** — AGENTS.md contract + this playbook | the only layer that carries *quality* | every session (agents read natively) | any |
 
 Evidence: instructions alone reliably fail (Cline memory-bank: "claims to update but
@@ -153,7 +189,15 @@ opposite overclaim — calling shape-checks "enforcement of knowledge" — is Go
 bait. Front-loading the contract is necessary but not sufficient; the write-forcing
 layers are the pressure substitute. Declared v1 cut ⚖: no PreCompact transcript
 snapshot (conflicts with minimal-generation; the SessionStart `compact` matcher
-already re-injects the pointer after compaction).
+already re-injects the pointer after compaction). Production evidence (1 Claude + 148 Codex
+threads, 2026-07..09): the pre-commit warning was ignored 8/8 times and the v1.2 Stop gate
+was satisfied only by `no-impact` lines — hence the session-scoped gate and dated escape.
+
+**Trust boundary.** Everything under `.okf/` is repo-controlled code executed by the hooks on
+every edit, stop and commit. Review it as you review `husky/` or CI; the runner `okf-py.sh`
+never lets uv read a repo `.python-version`, never downloads an interpreter, and falls back
+to bare `python3` — a repo-shipped `.python-version` once turned the Stop hook into a
+permanent block.
 
 ## 10. Anti-patterns (lint enforces most)
 

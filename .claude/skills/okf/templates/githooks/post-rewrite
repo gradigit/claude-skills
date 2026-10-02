@@ -1,0 +1,4 @@
+#!/bin/sh
+# okf post-rewrite (amend/rebase): remap the review anchor if the recorded commit was rewritten.
+[ -f .okf/okf-py.sh ] || exit 0
+exec sh .okf/okf-py.sh post-rewrite
