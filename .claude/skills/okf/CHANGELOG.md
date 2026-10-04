@@ -1,5 +1,39 @@
 # Changelog — okf skill
 
+## 1.4.0 (2026-10-03)
+
+**Truth check in `/okf audit`.** Lint can only check a wiki's shape. A production audit (four repos, 600 claims
+checked against the code) found 4.3% of checkable claims wrong, almost all exact numbers and status lines, and
+the review anchor and `noop-check` cannot see them: an `Okf-Impact: none` commit makes a stale wiki look CURRENT. `/okf audit` now adds a
+read-only truth check:
+
+- `lint.py claims [--n 12] [--seed S]` samples sentences from leaf pages, weighted toward status lines, numbers and
+  code references (where production went wrong), at most ~2n/pages per page, each with its cited sources (`[S#]`,
+  v0.2 `[^id]` footnotes, inline links and paths, or the page's Sources list). Deterministic per seed (default:
+  today), read-only, one sentence per output line. A repo whose `.okf/lint.py` predates 1.4.0 runs the skill's copy.
+- The agent checks every sampled sentence against code, config, tests, data, `raw/` captures and git history (never
+  the wiki) and reports one row per sentence: `supported` · `wrong` (only with the contradicting line quoted) ·
+  `unconfirmed` · `outside the repo`. Fixes go through `/okf update`. Rubric: reference.md §11.
+
+How the wording was settled (live runs on Claude Sonnet 5.5, all read-only, none changed a file):
+- First wording on real production wikis (clones of two repos): agents checked only the easy half of the sample
+  (6 of 12, 8 of 20), skipped the subagent fan-out and the second look. Second wording ("check every sentence",
+  default 12, quote the evidence for every flag): 12 of 12 checked in every run, but a "partly" verdict absorbed
+  "did not confirm" — the same 12 sentences got 4 partly flags in one run and 1 in the next. Final wording: `wrong`
+  needs a quoted contradicting line, otherwise `unconfirmed`. Four real-wiki audits: 46 of 48 sentences checked
+  (the 2 others lost to a `| head` on pretty-printed JSON, now one sentence per line), 0 `wrong`, no false alarms,
+  $0.28–0.35 per audit. Evidence gaps showed up as `unconfirmed` (5–6 of 12 in one repo cite gitignored scratch
+  files).
+
+A/B (eval case `audit-truth`: 19-page wiki, three facts gone stale behind an `Okf-Impact: none` commit so lint and
+`noop-check` say CURRENT, two claims wrong when written; prompt `/okf audit`):
+- 1.3.5 (structure-only audit): planted facts surfaced 3 of 15 (one run fact-checked on its own initiative).
+- 1.4.0, 20-sentence sample: 25 of 25 (5 runs). Final 1.4.0, 12-sentence sample: every sampled planted fact
+  reported (9 of 9 over 3 runs, plus one found outside the sample); recall per audit is bounded by the sample
+  (3–4 of 5). No true fact reported wrong in any run; cost $0.19–0.22 per audit, the same as 1.3.5's.
+
+The OKF v0.2 migration earlier earmarked for 1.4.0 is not in this release. Regression suite: 121 → 130.
+
 ## 1.3.5 (2026-10-03)
 
 From a production audit: 600 claims sampled from the four production wikis were

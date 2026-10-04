@@ -119,3 +119,13 @@
 **Then**
 - [ ] Lint's outdated-contract warning is shown; the contract is refreshed to v3 after a shown diff and
   confirmation (unattended: refreshed, choice logged), keeping the repo's own lines
+
+## Scenario 17: Truth check finds wrong claims lint cannot see (1.4.0)
+**Given** a bootstrapped repo where three facts went stale behind an `Okf-Impact: none` commit (lint and noop-check
+say CURRENT) and two claims were wrong when written
+**When** user says "/okf audit" or "is the wiki still accurate?"
+**Then**
+- [ ] `claims` sample is taken (the skill's own script when the repo's `.okf/lint.py` predates 1.4.0)
+- [ ] Every sampled sentence gets a verdict row; each `wrong` quotes the contradicting line
+- [ ] The planted wrong facts that were sampled are reported wrong; no true fact is reported wrong
+- [ ] Nothing in the repo changes; fixes are left to `/okf update`

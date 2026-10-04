@@ -2,7 +2,7 @@
 name: okf
 description: Bootstraps and maintains the agent knowledge base (OKF / Karpathy LLM-wiki) in a repo, and is the only correct way to change that wiki's structure: use it whenever the user asks to bootstrap, set up, create, migrate, repair, lint, audit or update a wiki or knowledge base for agents, asks whether the wiki is up to date or rotting, or mentions OKF, llm-wiki, the AGENTS.md contract or `.okf/`. Auto-detects repo state and routes to bootstrap (value-gated, full or lite), update, lint, audit, migrate or repair; installs the AGENTS.md contract, Claude Code and Codex hooks, git hooks, a git-tracking guard and a stdlib lint. Never hand-roll a knowledge base instead of using this skill. Do NOT use for ordinary documentation work (READMEs, docstrings, API docs) that does not involve the agent-maintained knowledge base.
 argument-hint: "[bootstrap|update|lint|audit|migrate|repair]"
-version: "1.3.5"
+version: "1.4.0"
 ---
 
 # OKF — bootstrap & maintain an agent knowledge base
@@ -43,7 +43,7 @@ Priority order, first match wins. Auto-detect the wiki dir among `wiki/`, `docs/
 
 | # | State | Signals | Route |
 |---|-------|---------|-------|
-| 1 | Fully bootstrapped | AGENTS.md contains `<!-- okf:contract` AND CLAUDE.md delegates to it (symlink, `@AGENTS.md` import, or a file whose content is just `AGENTS.md`) AND `<wiki>/index.md` + `.okf/config.json` exist (config.json is the bootstrap-completed marker) | `update` (or `audit` if the user asked for status) |
+| 1 | Fully bootstrapped | AGENTS.md contains `<!-- okf:contract` AND CLAUDE.md delegates to it (symlink, `@AGENTS.md` import, or a file whose content is just `AGENTS.md`) AND `<wiki>/index.md` + `.okf/config.json` exist (config.json is the bootstrap-completed marker) | `update` (or `audit` if the user asked for status or whether the wiki is still accurate) |
 | 2 | Partial / drifted | Wiki exists but contract, delegation, `.okf/`, or hooks missing; or CLAUDE.md and AGENTS.md are diverged regular files with real content | `repair` |
 | 3 | Legacy / foreign wiki | `docs/llm-wiki/` without frontmatter, `openwiki/`, `droid-wiki/`, flat dated `research-*.md`, or ANY substantial pre-OKF knowledge dir (`architect/`, `research/`, `notes/`, dated reports) | `migrate` |
 | 4 | Nothing | none of the above | `bootstrap` |
@@ -79,7 +79,7 @@ Always also check: `git rev-parse --show-toplevel` succeeds (no git → bootstra
 
 1. **No-op short-circuit:** `python3 .okf/lint.py noop-check`. `CURRENT` → report "wiki already current," stop. `STALE` lists **uncertified commits** (code touched, no wiki, no `[no-impact]`/`Okf-Impact: none` marker) and uncommitted paths — commits that already carried their wiki update are not listed. `NO-STATE` (fresh clone) → `state-update --from-last-wiki-commit`, then re-run. It fails toward STALE on any git uncertainty; trust it.
 2. **Diff per commit:** `git log <anchor>..HEAD --stat` for the listed commits; `git diff --name-status HEAD` for the worktree.
-3. **Docs-impact plan:** changed source → affected wiki page → edit → why. No impact → no edit.
+3. **Docs-impact plan:** changed source → affected wiki page → edit → why; include any claim a truth audit (§Audit) reported wrong. No impact → no edit.
 4. **Soft diff budget:** <5 source files changed → edit ≤1–2 pages; >3 pages needing edits demands re-justification. Budget by commit when the list is long. No-op updates are valid.
 5. **Surgical edits:** replace the stale sentence; no formatting-only edits; bump the page `timestamp` (or `generated.at`) when meaning changes. **Sweep the whole wiki, not just the page you opened:** when a change resolves a status line ("open blocker", "not supported", "refused", "out of scope") or changes a count or value, `grep -rn '<feature>\|<old value>' <wiki>/` and fix every page that states it. In the 2026-10 production audit, status lines and counts on pages nobody reopened were most of the wrong claims ([reference.md](reference.md) §6).
 6. **Rename safety:** renaming a page rewrites ALL inbound relative links in the same change.
@@ -90,11 +90,18 @@ Always also check: `git rev-parse --show-toplevel` succeeds (no git → bootstra
 
 ## Lint
 
-`python3 .okf/lint.py lint` — deterministic, repo-local, stdlib-only; from a subdirectory use `python3 "$(git rev-parse --show-toplevel)/.okf/lint.py" lint`. Errors (exit 1): missing/malformed/placeholder frontmatter, multi-line scalars in required fields, absolute internal links, `index.md` entries for pages that do not exist (a line saying `planned` downgrades to a warning), gitignored wiki or wiki files, cited local evidence that is untracked or gitignored, non-git repo, missing root index. Warnings: unknown `type`, forward/broken links in pages, an AGENTS.md contract older than the template, orphans (log.md links don't count), missing per-dir index, thin pages, missing citations (`## Sources`, `source:` or v0.2 `sources:`), untracked files (named), passed `stale_after`, >200-line root index, duplicate descriptions, symlinked pages, descriptions opening with a generic word, index entries that do not reuse a page's description verbatim, subdirectories before ~7 pages. The write-time hook surfaces the description and index checks while you author, whichever tool wrote the page (Edit, Write, apply_patch or a shell command): fix them then. Fix errors now; triage warnings visibly. `--help` prints usage.
+`python3 .okf/lint.py lint` — deterministic, repo-local, stdlib-only; from a subdirectory use `python3 "$(git rev-parse --show-toplevel)/.okf/lint.py" lint`. Errors (exit 1): missing/malformed/placeholder frontmatter, multi-line scalars in required fields, absolute internal links, `index.md` entries for pages that do not exist (a line saying `planned` downgrades to a warning), gitignored wiki or wiki files, cited local evidence that is untracked or gitignored, non-git repo, missing root index. Warnings: unknown `type`, forward/broken links in pages, an AGENTS.md contract older than the template, orphans (log.md links don't count), missing per-dir index, thin pages, missing citations (`## Sources`, `source:` or v0.2 `sources:`), untracked files (named), passed `stale_after`, >200-line root index, duplicate descriptions, symlinked pages, descriptions opening with a generic word, index entries that do not reuse a page's description verbatim, subdirectories before ~7 pages. The write-time hook surfaces the description and index checks while you author, whichever tool wrote the page (Edit, Write, apply_patch or a shell command): fix them then. Fix errors now; triage warnings visibly. `--help` prints usage; `claims` is the truth-check sampler (§Audit).
 
 ## Audit (read-only)
 
-Report, change nothing: detection state, lint summary, `noop-check` result, page/dir counts, log.md recency, hook presence (`.claude/settings.json`, `.codex/hooks.json`, `git config core.hooksPath`, CI workflow), anchor age, git-tracking status. End with a prioritized repair list.
+Report, change nothing.
+
+1. **Structure:** detection state, lint summary, `noop-check` result, page/dir counts, log.md recency, hook presence (`.claude/settings.json`, `.codex/hooks.json`, `git config core.hooksPath`, CI workflow), anchor age, git-tracking status. End with a prioritized repair list.
+2. **Truth check** — whether the pages are still true, which lint cannot see. In a production audit, 4.3% of checkable claims were wrong, nearly all exact numbers or status lines.
+   1. `python3 .okf/lint.py claims` samples 12 sentences (`--n` only if the user asks for more; `--seed` resamples), weighted toward status lines, numbers and code references, each with its cited sources. A repo whose `.okf/lint.py` predates 1.4.0 has no `claims`: run the skill's own `scripts/okf_lint.py claims` from the repo root instead (audit never upgrades `.okf/`).
+   2. **Check every sampled sentence** against the repository per [reference.md](reference.md) §11 — the wiki is never evidence; code, config, tests, data, `raw/` captures and git history are. "Not checked" is not a verdict: the hard-to-check sentences are where wrong ones hide. Verdicts: **supported** (cite the confirming line) · **wrong** (all or part of it is contradicted: quote the contradicting line and say whether it went stale or was never true) · **unconfirmed** (checkable, but you found no evidence either way; say what you searched) · **outside the repo** (a decision, rationale or external fact the repo cannot confirm — expected, not a defect). In a large repo, split the sentences across read-only subagents (Claude Code: Agent tool; Codex: spawn_agent); they report and never edit (invariant 3).
+   3. **Second look on every "wrong":** open the evidence again and quote the exact contradicting line (or have a fresh subagent, not told your verdict, re-check it). No quote, no "wrong" — it becomes unconfirmed. In the production audit a first pass's flags held up 42 of 72 times; its "supported" verdicts 96 of 96.
+   4. Report one row per sampled sentence — `| page:line | claim | verdict | evidence (quoted for "wrong") | suggested fix |` — then the counts per verdict, stating that it is a sample. Fixes go through `/okf update` (Docs-impact plan), never through the audit.
 
 ## Repair (partial / drifted — confirmation-gated)
 
@@ -119,4 +126,4 @@ Identical files, contract and hooks. `.codex/hooks.json` carries the same Sessio
 
 Update when: (1) the user corrects a flow; (2) OKF spec moves past v0.2 or renames reserved files (config makes reserved names parameters); (3) lint changes — keep `scripts/okf_lint.py` and repo copies in sync (`lintVersion` is stamped in state files; re-copy on the next `/okf` run per repo); (4) a production repo patches `.okf/` locally — upstream it.
 
-Current version: 1.3.5 — see [CHANGELOG.md](CHANGELOG.md) for the production evidence behind each change.
+Current version: 1.4.0 — see [CHANGELOG.md](CHANGELOG.md) for the production evidence behind each change.

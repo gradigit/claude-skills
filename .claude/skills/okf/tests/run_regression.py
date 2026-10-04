@@ -639,5 +639,49 @@ w(d, "AGENTS.md", "# A\n<!-- okf:contract v3 -->\n## Knowledge base\n<!-- /okf:c
 code, out = lint(d, "lint")
 check("...and is quiet at the current contract version", "contract v" not in out, out)
 
+
+# ── 140. truth-audit sampler (1.4.0): `claims` samples sentences for the agent to check against the repo
+d = mkrepo("claims")
+w(d, "wiki/concepts/exporter.md", "---\ntype: reference\ntitle: Exporter\ndescription: Ledger exporter formats and the refused TSV option.\nsource: src/export.py\n---\n"
+  "# Exporter\n\nThe exporter writes CSV and JSONL files for the nightly job every single night [S1]. TSV is refused until the "
+  "tab-escaping blocker is resolved by the data team [S1]. The `export()` function takes a ledger and a format name as arguments.\n\n"
+  "```\nnot a claim inside a code block with many words here\n```\n\n"
+  "- The nightly job writes exactly 2 export files into the out directory [S2].\n- Short bullet.\n\n"
+  "## Related\n- [Good](good.md) — the frobnicator retry contract rules and more words here.\n\n"
+  "## Sources\n[S1] Local: src/export.py\n[S2] Local: src/nightly.py\n")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [Exporter](exporter.md) — Ledger exporter formats and the refused TSV option.\n")
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "exporter", "--no-verify")
+code, out = lint(d, "claims", "--n", "50", "--seed", "1")
+try:
+    cj = json.loads(out)
+except ValueError:
+    cj = {}
+texts = [c["text"] for c in cj.get("claims", [])]
+check("claims prints JSON with sampled sentences", code == 0 and cj.get("sampled") == len(texts) > 0, out[:300])
+check("claims skips code blocks, Related/Sources sections and short bullets",
+      not any("code block" in t or "retry contract rules and more" in t or "Short bullet" in t or "Local:" in t for t in texts), str(texts))
+kinds = {c["text"][:20]: c["kind"] for c in cj.get("claims", [])}
+check("claims classifies status lines, numbers and code references",
+      any(c["kind"] == "status" and "refused" in c["text"] for c in cj.get("claims", []))
+      and any(c["kind"] == "number" and "exactly 2" in c["text"] for c in cj.get("claims", []))
+      and any(c["kind"] == "code" and "export()" in c["text"] for c in cj.get("claims", [])), str(kinds))
+check("claims maps [S#] markers to their cited sources",
+      any("exactly 2" in c["text"] and c["cites"] == ["src/nightly.py"] for c in cj.get("claims", [])), str(cj.get("claims"))[:300])
+check("claims never samples index.md or log.md", all(not c["page"].endswith(("index.md", "log.md")) for c in cj.get("claims", [])), str(cj.get("claims"))[:200])
+code2, out2 = lint(d, "claims", "--n", "2", "--seed", "1")
+code3, out3 = lint(d, "claims", "--n", "2", "--seed", "1")
+check("claims is deterministic for a seed and honors --n", out2 == out3 and json.loads(out2)["sampled"] == 2, out2[:200])
+check("claims prints one sentence per line (a `| head` cannot drop half the sample)", len(out.strip().splitlines()) == cj.get("sampled", -1) + 2, out[:200])
+st = sh(d, "git", "status", "--porcelain")[1]
+check("claims is read-only (worktree untouched)", st.strip() == "", st)
+for i in range(6):
+    w(d, "wiki/concepts/big%d.md" % i, "---\ntype: reference\ntitle: Big %d\ndescription: Filler page %d for the sampler spread regression case.\n---\n# Big\n\n" % (i, i)
+      + " ".join("Sentence number %d on this page states a fact with 3 values in it." % k for k in range(12)) + "\n")
+w(d, "wiki/concepts/huge.md", "---\ntype: reference\ntitle: Huge\ndescription: One very long page that must not fill the whole sample alone.\n---\n# Huge\n\n"
+  + " ".join("Huge sentence %d holds a number like 42 and the word blocker inside." % k for k in range(200)) + "\n")
+code, out = lint(d, "claims", "--n", "16", "--seed", "3")
+pages = [c["page"] for c in json.loads(out)["claims"]]
+check("claims spreads the sample across pages (one long page cannot fill it)", pages.count("concepts/huge.md") <= 4 and len(set(pages)) >= 5, str(pages))
+
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

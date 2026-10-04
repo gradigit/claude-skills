@@ -214,6 +214,31 @@ permanent block.
   timestamp meaning-changes, resolve contradictions recency-wins).
 - Writing to the wiki during read-only/review/audit sessions.
 
+## 11. Truth audit — checking a page against the repository
+
+`/okf audit` step 2. Lint checks shape; this checks whether sentences are still true.
+
+- **Evidence.** The repository at HEAD: source, config, tests, scripts, data, `raw/` captures, docs outside the
+  wiki, and git history (`git log -S'<value>' -- <file>`, `git log -p`, `git show`). Never the page itself, other
+  wiki pages or `log.md` — the same agents wrote them.
+- **Verdicts.** `supported` — evidence seen that confirms it (cite file:line or commit). `wrong` — evidence seen
+  that contradicts all or part of it (a number, name, path, status or scope); quote the contradicting line.
+  `unconfirmed` — checkable in principle, but nothing found either way; say what was searched. `outside the repo`
+  — a decision, rationale or external fact the repository cannot confirm. Never write `supported` or `wrong`
+  without having seen the evidence: in two audits of the same sample, a checker that called things "partly" without
+  a contradicting line was overturned 3 times out of 4.
+- **Dated statements** ("as of 2026-07-13") are judged against the repo at that date via git history.
+- **When written.** For `wrong`, say whether it was true when the page stated it (rotted) or never
+  (wrong at write time). The production audit found about half of each.
+- **Second look.** First-pass checkers over-flag: in the production audit an independent re-check kept 42 of 72
+  flags (24 as wrong) and overturned none of 96 "supported" verdicts. So every `wrong` needs its contradicting
+  line quoted after re-opening the evidence (or a blind re-check by a fresh checker); without it the verdict is
+  `unconfirmed`.
+- **Outside the repo is information, not failure.** Decisions and rationale that exist only in the wiki are what it
+  is for; report their count, do not "fix" them. `unconfirmed` sentences are worth a citation or a `raw/` capture.
+- **After the audit.** `/okf update` fixes the wrong sentences surgically (newest evidence wins); for a number,
+  prefer adding its provenance (§6) to just swapping the value.
+
 ## Sources (abbreviated)
 
 Karpathy LLM-wiki gist · OKF SPEC.md v0.1 (GoogleCloudPlatform/knowledge-catalog) ·

@@ -25,6 +25,11 @@ work from any subdirectory):
   post-commit        Git post-commit: advances the anchor when the commit touched the wiki.
   post-rewrite       Git post-rewrite: follows the anchor through amend/rebase.
   install-hooks      Merge the hook fragment into .claude/settings.json or --target codex.
+  claims [--n N] [--seed S]
+                     Truth-audit sampler: N (default 12) sentences from leaf pages, weighted toward status
+                     lines, exact numbers and code references (where production wikis went
+                     wrong), as JSON with each sentence's cited sources. Read-only, deterministic
+                     for a given seed (default: today's date).
   pre-commit         Git pre-commit gate: staged wiki pages must pass lint and every
                      index.md entry must point at a page in the commit (errors block,
                      exit 1); committing code without any wiki/log change prints a
@@ -41,7 +46,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.3.5"
+OKF_LINT_VERSION = "1.4.0"
 CONTRACT_VERSION = 3          # templates/agents-contract.md marker; older blocks in AGENTS.md are refreshed by /okf
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
@@ -1259,6 +1264,153 @@ def run_install_hooks(fragment_path, target="claude"):
 
 # ---------------------------------------------------------------- main
 
+# ---------------------------------------------------------------- claims (truth-audit sampler)
+# Production audit (2026-10, 600 claims over 4 wikis): the wrong claims were almost all exact numbers and status lines,
+# so the sampler weights those kinds; the agent then checks each sentence against the repo (SKILL.md §Audit).
+
+CLAIM_WEIGHTS = {"status": 4, "number": 3, "code": 2, "other": 1}
+STATUS_RE = re.compile(r"\b(blockers?|blocked|not supported|unsupported|refus\w*|out of scope|not yet|todo|pending|deprecated|"
+                       r"disabled|workaround|work around|until|unmet|open (?:blocker|question|issue)|stays|planned|missing|"
+                       r"broken|fails?|failing|not implemented|no longer)\b", re.I)
+SKIP_SECTIONS = ("sources", "related", "references", "see also")
+
+
+def _claim_kind(sentence):
+    if STATUS_RE.search(sentence):
+        return "status"
+    bare = re.sub(r"\[\^?S?\d+\]|\b\d{4}-\d{2}-\d{2}\b|\bADR-\d+\b|`[^`]*`", " ", sentence)
+    if re.search(r"\d", bare):
+        return "number"
+    if "`" in sentence:
+        return "code"
+    return "other"
+
+
+def _page_sources(text, fm):
+    src = {}
+    for m in re.finditer(r"^\s*(?:[-*]\s+)?\[(S\d+)\]\s+(?:Local:\s*)?(.+)$", text, re.M):
+        src[m.group(1)] = m.group(2).strip()
+    for m in re.finditer(r"^\[\^([\w.-]+)\]:\s*(.+)$", text, re.M):     # OKF v0.2 footnotes
+        src[m.group(1)] = m.group(2).strip()
+    default = [v for k in ("source", "resource") for v in [(fm or {}).get(k)] if isinstance(v, str) and v and "<" not in v]
+    # no per-sentence marker and no source field: the page's own Sources list is the best hint
+    return src, default or list(src.values())[:3]
+
+
+def claim_candidates(rel, text):
+    """(line, sentence) units of a leaf page body: paragraphs and bullet items split into sentences; headings,
+    code blocks, link-only lines and the Sources/Related sections are skipped."""
+    fm = parse_frontmatter(text) if text.startswith("---") else {}
+    src, default = _page_sources(text, fm if isinstance(fm, dict) else {})
+    lines = text.splitlines()
+    start = 0
+    if text.startswith("---"):
+        end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
+        start = end + 1
+    units, buf, buf_line, section, fence = [], [], None, "", False
+
+    def flush():
+        if buf:
+            units.append((buf_line, " ".join(x.strip() for x in buf)))
+        buf.clear()
+
+    for i in range(start, len(lines)):
+        line = lines[i]
+        if line.lstrip().startswith("```"):
+            fence = not fence
+            flush()
+            continue
+        if fence:
+            continue
+        h = re.match(r"^#{1,6}\s+(.*)", line)
+        if h:
+            flush()
+            section = h.group(1).strip().lower()
+            continue
+        if any(section.startswith(x) for x in SKIP_SECTIONS) or line.lstrip().startswith(("<!--", "|")):
+            flush()
+            continue
+        if not line.strip():
+            flush()
+            continue
+        if re.match(r"^\s*([-*+]|\d+\.)\s+", line):
+            flush()
+            line = re.sub(r"^\s*([-*+]|\d+\.)\s+", "", line)
+        if not buf:
+            buf_line = i + 1
+        buf.append(line)
+    flush()
+    out = []
+    for ln, para in units:
+        for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9`*\"(\[])", para):
+            plain = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", sent)
+            if len(re.findall(r"[A-Za-z0-9]+", plain)) < 6:
+                continue
+            ids = re.findall(r"\[\^?(S\d+)\]", sent) + re.findall(r"\[\^([\w.-]+)\]", sent)
+            inline = [l for l in re.findall(r"\]\(([^)\s#]+)", sent) if not l.endswith(".md") or l.startswith("..")]
+            inline += [t for t in re.findall(r"`([^`\s]+)`", sent) if "/" in t or re.search(r"\.(py|ts|js|mjs|json|toml|ya?ml|sh|sql|md)$", t)]
+            cites = list(dict.fromkeys([src[k] for k in ids if k in src] + inline)) or default
+            out.append({"id": "%s:%d" % (rel, ln), "page": rel, "line": ln, "kind": _claim_kind(sent), "text": sent.strip(),
+                        "cites": cites})
+    return out
+
+
+def run_claims(args):
+    import random
+    def opt(name, default):
+        if name in args and args.index(name) + 1 < len(args):
+            try:
+                return int(args[args.index(name) + 1])
+            except ValueError:
+                pass
+        return default
+    n = max(1, opt("--n", 12))
+    seed = opt("--seed", date.today().toordinal())
+    chdir_repo_root()
+    wiki = find_wiki_dir(load_config())
+    if not wiki:
+        print(json.dumps({"error": "no wiki directory found"}))
+        return 1
+    cands = []
+    for rel, is_leaf in iter_pages(wiki):
+        if not is_leaf:
+            continue
+        try:
+            cands += claim_candidates(rel, read_text(os.path.join(wiki, rel)))
+        except OSError:
+            continue
+    cands.sort(key=lambda c: (c["page"], c["line"], c["text"]))
+    for k, c in enumerate(cands):     # several sentences can share a paragraph's line
+        c["id"] = "%s#%d" % (c["id"], sum(1 for d in cands[:k] if d["page"] == c["page"] and d["line"] == c["line"]) + 1)
+    rng = random.Random(seed)
+    # weighted sampling without replacement (key = u^(1/w)), at most ~2n/pages per page so one long page cannot fill it
+    keyed = sorted(cands, key=lambda c: rng.random() ** (1.0 / CLAIM_WEIGHTS[c["kind"]]), reverse=True)
+    n_pages = len({c["page"] for c in cands}) or 1
+    cap = max(2, -(-2 * n // n_pages))
+    picked, per_page = [], {}
+    for c in keyed:
+        if len(picked) >= n:
+            break
+        if per_page.get(c["page"], 0) < cap:
+            picked.append(c)
+            per_page[c["page"]] = per_page.get(c["page"], 0) + 1
+    for c in keyed:   # pages ran out under the cap: fill from the rest
+        if len(picked) >= n:
+            break
+        if c not in picked:
+            picked.append(c)
+    picked.sort(key=lambda c: (c["page"], c["line"]))
+    kinds = {}
+    for c in cands:
+        kinds[c["kind"]] = kinds.get(c["kind"], 0) + 1
+    # one sentence per line: still valid JSON, and a `| head` in the caller cannot silently drop half the sample
+    head = json.dumps({"wiki": wiki, "seed": seed, "candidates": len(cands), "candidates_by_kind": kinds,
+                       "sampled": len(picked)}, ensure_ascii=False)
+    body = ",\n".join(" " + json.dumps(c, ensure_ascii=False) for c in picked)
+    print(head[:-1] + ', "claims": [\n' + body + "\n]}")
+    return 0
+
+
 USAGE = """okf lint %s — usage: python3 .okf/lint.py <subcommand> [flags]
   lint [--quiet]                       structure guard (exit 1 on errors)
   noop-check                           CURRENT / STALE (per-commit) / NO-STATE
@@ -1268,6 +1420,7 @@ USAGE = """okf lint %s — usage: python3 .okf/lint.py <subcommand> [flags]
   session-start                        SessionStart hook: pointer + session base HEAD
   pre-commit | post-commit | post-rewrite   git hooks
   install-hooks <fragment.json> [--target claude|codex]
+  claims [--n 12] [--seed S]           truth-audit sample (JSON); read-only
 """ % OKF_LINT_VERSION
 
 def main():
@@ -1297,6 +1450,8 @@ def main():
         target = args[args.index("--target") + 1] if "--target" in args and args.index("--target") + 1 < len(args) else "claude"
         frag = next((a for a in args[1:] if not a.startswith("-") and a != target), None)
         return run_install_hooks(frag, target=target)
+    if cmd == "claims":
+        return run_claims(args)
     if cmd == "lint" or cmd.startswith("-"):
         return run_lint(quiet="--quiet" in args)
     print("okf: unknown subcommand %r\n%s" % (cmd, USAGE))
