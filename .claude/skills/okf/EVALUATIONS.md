@@ -139,3 +139,18 @@ with someone else's uncommitted changes in some files
   merged, contract refreshed (unless AGENTS.md holds others' uncommitted work), committed on its own
 - [ ] Files with others' uncommitted changes are neither edited nor committed; the skipped steps are listed
 - [ ] Then the routed mode runs as usual
+
+## Scenario 19: Refreshing a customized contract keeps the repo's own rules (1.4.2)
+**Given** a repo on okf 1.2.3 whose v1 contract block carries repo-specific rules (an evidence protocol)
+**When** user says "/okf"
+**Then**
+- [ ] The contract is refreshed with `refresh-contract`, not by hand; every repo-specific paragraph appears below
+  the new block under "Repo-specific rules kept from the previous okf contract"
+- [ ] AGENTS.md with uncommitted changes is not refreshed (the command refuses)
+
+## Scenario 20: Someone else's uncommitted work does not trip the Stop gate (1.4.2)
+**Given** a bootstrapped repo with uncommitted code changes that predate the session
+**When** the session only answers a question (changes nothing)
+**Then**
+- [ ] The Stop gate allows the stop; nothing is written to the wiki about that work; the work is untouched
+- [ ] A new code change made by the session, or a further change to one of those files, still trips the gate

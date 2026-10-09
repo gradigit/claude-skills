@@ -1,5 +1,30 @@
 # Changelog — okf skill
 
+## 1.4.2 (2026-10-09)
+
+Two defects found while upgrading the production repos with 1.4.1.
+
+- **`refresh-contract` replaces an older contract block mechanically.** By hand, the agent refreshing a repo's
+  customized v1 block kept two of its rules and dropped three (an evidence protocol); they had to be restored by
+  hand. `python3 <skill>/scripts/okf_lint.py refresh-contract` swaps in the current template and moves every
+  paragraph that contains non-template text (judged against the v1, v2 and v3 templates, embedded) below the block
+  under "Repo-specific rules kept from the previous okf contract". Idempotent; refuses while AGENTS.md has
+  uncommitted changes. SKILL.md: refresh only with the command, and leave the kept section as it is.
+- **The Stop gate ignores uncommitted work that predates the session.** SessionStart records every uncommitted
+  path with a content signature (`.okf/session-dirty.json`, gitignored); the Stop gate skips paths unchanged since,
+  so another session's or the user's work in progress neither trips nor satisfies it. Live, the old gate fired on
+  a user's five uncommitted source files and the agent wrote a wiki note about work it never touched.
+
+A/B on Claude Sonnet 5.5, 1.4.1 vs 1.4.2:
+- `predirty-question` (someone's uncommitted code; the session only answers a question): wrote to the wiki about
+  that work 6/6 vs 0/6 (p = 0.002); turns 5–6 vs 2–3, $0.13 vs $0.10 per run; the work untouched in both.
+- `upgrade-rewritten` (a 1.2.3 repo whose v1 block was rewritten in its own words, generic and specific sentences
+  mixed): of five repo-specific phrases, 1.4.1 kept 7 of 15 over 3 runs (one run never refreshed); 1.4.2 with the
+  first wording kept 12 of 15 — the command kept everything, then the agent, told to "delete only what the new
+  contract covers", trimmed a paragraph with a specific clause in it; with "leave them as they are", 15 of 15.
+- `upgrade-custom` (custom rules in a separate paragraph): 3/3 in both. No regression on update-stale, bootstrap,
+  repair, migrate, ship-crosspage-hard or audit-truth. Regression suite: 132 → 140.
+
 ## 1.4.1 (2026-10-09)
 
 From an upgrade rehearsal: `/okf` run unattended on copies of the four production repos (still on okf 1.2.3), with

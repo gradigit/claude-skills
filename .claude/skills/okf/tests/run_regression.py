@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Regression suite for okf_lint.py v1.1 — one assertion per reproduced panel finding."""
-import json, os, shutil, subprocess, sys, tempfile
+import json, os, re, shutil, subprocess, sys, tempfile
 from datetime import date
 
 # resolve relative to this file so the suite survives copies/publishes of the skill dir
@@ -697,6 +697,56 @@ w(fake_home, ".claude/skills/okf/scripts/okf_lint.py", 'OKF_LINT_VERSION = "0.0.
 r = subprocess.run([sys.executable, os.path.join(d, ".okf", "lint.py"), "session-start"], cwd=d, input='{"source":"startup"}',
                    capture_output=True, text=True, env=env, timeout=60)
 check("...and stays quiet when the installed skill is older", "run /okf to upgrade" not in r.stdout, r.stdout)
+
+
+# ── 160. refresh-contract (1.4.2): by hand, an agent dropped three of a repo's evidence rules from a v1 block
+TEMPLATE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "agents-contract.md")
+V1 = open(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts", "okf_lint.py")).read()
+d = mkrepo("refreshstock")
+v1_block = re.search(r'OLD_CONTRACTS = \((".*?"), "', V1, re.S)
+v1_text = json.loads(v1_block.group(1)).replace("{WIKI}", "wiki")
+w(d, "AGENTS.md", "# Repo\n\nRun the tests first.\n\n" + v1_text + "\n## Release rules\n\nTag every release.\n")
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "v1 contract")
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+a = open(os.path.join(d, "AGENTS.md")).read()
+check("refresh-contract replaces a stock v1 block with the template", code == 0 and "okf:contract v3" in a and "okf:contract v1" not in a
+      and "Repo-specific rules kept" not in a and "template text only" in out, out + a[:200])
+check("refresh-contract keeps everything outside the block", a.startswith("# Repo\n\nRun the tests first.") and a.rstrip().endswith("Tag every release."), a[-200:])
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+check("refresh-contract is idempotent (already current)", code == 0 and "already v3" in out, out)
+d = mkrepo("refreshcustom")
+custom = v1_text.replace("<!-- /okf:contract v1 -->", "Record URL, capture time and claim status for every source in `research/`.\n\n<!-- /okf:contract v1 -->")
+w(d, "AGENTS.md", "# Repo\n\n" + custom)
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "custom v1 contract")
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+a = open(os.path.join(d, "AGENTS.md")).read()
+kept_at = a.find("## Repo-specific rules kept from the previous okf contract")
+check("refresh-contract keeps repo-specific contract text below the new block", code == 0 and kept_at > a.find("<!-- /okf:contract v3 -->") > 0
+      and "Record URL, capture time and claim status" in a[kept_at:], out + a[-400:])
+d = mkrepo("refreshdirty")
+w(d, "AGENTS.md", "# Repo\n\n" + v1_text)
+sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "v1")
+w(d, "AGENTS.md", "# Repo\n\nSomeone's uncommitted note.\n\n" + v1_text)
+before_txt = open(os.path.join(d, "AGENTS.md")).read()
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+check("refresh-contract refuses while AGENTS.md has uncommitted changes", code == 1 and "uncommitted" in out
+      and open(os.path.join(d, "AGENTS.md")).read() == before_txt, out)
+
+# ── 161. the Stop gate ignores uncommitted work that predates the session (1.4.2)
+d = mkrepo("predirty")
+w(d, "src.py", "x = 1\n"); sh(d, "git", "add", "src.py"); sh(d, "git", "commit", "-qm", "code")
+w(d, "src.py", "x = 2  # someone's work in progress\n")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read() + "\nUncommitted edit by another session.\n")
+lint(d, "session-start", stdin='{"source":"startup"}')
+code, out = lint(d, "stop-gate", stdin="{}")
+check("Stop gate allows a session that changed nothing (pre-existing uncommitted code ignored)", code == 0, "code=%s %s" % (code, out))
+w(d, "other.py", "y = 1\n")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("...blocks new code even though a pre-existing wiki edit is lying around", code == 2 and "other.py" in out, "code=%s %s" % (code, out))
+os.remove(os.path.join(d, "other.py"))
+w(d, "src.py", "x = 3  # changed again during this session\n")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("...and blocks when the session changes a pre-existing uncommitted file further", code == 2 and "src.py" in out, "code=%s %s" % (code, out))
 
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

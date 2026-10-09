@@ -25,6 +25,10 @@ work from any subdirectory):
   post-commit        Git post-commit: advances the anchor when the commit touched the wiki.
   post-rewrite       Git post-rewrite: follows the anchor through amend/rebase.
   install-hooks      Merge the hook fragment into .claude/settings.json or --target codex.
+  refresh-contract [--template PATH]
+                     Replace an older okf contract block in AGENTS.md with the current template;
+                     every line that is not okf template text moves below the block, so nothing
+                     repo-specific is lost. Refuses while AGENTS.md has uncommitted changes.
   claims [--n N] [--seed S]
                      Truth-audit sampler: N (default 12) sentences from leaf pages, weighted toward status
                      lines, exact numbers and code references (where production wikis went
@@ -46,13 +50,14 @@ import subprocess
 import sys
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.4.1"
+OKF_LINT_VERSION = "1.4.2"
 CONTRACT_VERSION = 3          # templates/agents-contract.md marker; older blocks in AGENTS.md are refreshed by /okf
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
 STATE_PATH = os.path.join(OKF_DIR, "last-update.json")
 SESSION_HEAD_PATH = os.path.join(OKF_DIR, "session-head")   # per-clone, gitignored: HEAD when this session started
 HOOK_SEEN_PATH = os.path.join(OKF_DIR, "hook-seen.json")      # per-clone, gitignored: wiki file states the hook already processed
+SESSION_DIRTY_PATH = os.path.join(OKF_DIR, "session-dirty.json")  # per-clone, gitignored: uncommitted paths that predate the session
 WIKIDIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 V02_STATUS = ("draft", "stable", "deprecated")
 LEGACY_STATUS = ("verified", "unverified", "draft")
@@ -985,6 +990,43 @@ def run_post_rewrite():
             return 0
     return 0
 
+def _path_sig(p):
+    """Content signature of a worktree path: file hash, 'dir' for an untracked directory, 'missing' when gone."""
+    if os.path.isdir(p) and not os.path.islink(p):
+        return "dir"
+    try:
+        with open(p, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    except OSError:
+        return "missing"
+
+
+def _record_session_dirty():
+    """Uncommitted paths at session start, with signatures: work that predates the session (another session's or
+    the user's) must not trip the Stop gate, and must not satisfy it either (eval: the gate fired on a user's five
+    uncommitted source files and the agent wrote a wiki note about work it never touched)."""
+    code, out = git("status", "--porcelain", strip=False)
+    if code != 0:
+        return
+    sig = {p: _path_sig(p) for p in porcelain_paths(out)}
+    try:
+        with open(SESSION_DIRTY_PATH, "w", encoding="utf-8") as f:
+            json.dump(sig, f)
+    except OSError:
+        pass
+
+
+def _changed_this_session(paths):
+    """Drop paths that were already uncommitted at session start and are unchanged since."""
+    try:
+        pre = json.load(open(SESSION_DIRTY_PATH, encoding="utf-8"))
+    except (OSError, ValueError):
+        return paths
+    if not isinstance(pre, dict):
+        return paths
+    return [p for p in paths if p not in pre or _path_sig(p) != pre[p]]
+
+
 def _version_tuple(v):
     return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3])
 
@@ -1011,6 +1053,7 @@ def run_session_start():
                 f.write(head + "\n")
         except OSError:
             pass
+        _record_session_dirty()
     _save_seen(_wiki_file_states(wiki))
     print("OKF knowledge base active: read %s/index.md first; follow relative links. Persist durable findings to %s/ as you work "
           "(single writer; subagents read-only). Obligations: AGENTS.md -> ## Knowledge base." % (wiki, wiki))
@@ -1076,7 +1119,7 @@ def run_stop_gate():
     if code != 0:
         print("{}")
         return 0
-    paths = porcelain_paths(out)
+    paths = _changed_this_session(porcelain_paths(out))
     wiki_touched = _touches_wiki(paths, wiki)
     code_changed = [p for p in paths if _is_code(p, wiki)]
     base = None
@@ -1428,6 +1471,91 @@ def run_claims(args):
     return 0
 
 
+# ---------------------------------------------------------------- refresh-contract
+# Earlier okf contract templates, verbatim: a line of an old block that matches one of these (or the current template)
+# is okf text; anything else is the repo's own and is kept. Eval: an agent refreshing a customized v1 block by hand
+# dropped three of a repo's evidence rules.
+OLD_CONTRACTS = ("<!-- okf:contract v1 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo maintains a durable, agent-facing knowledge base under `{WIKI}/`.\nIt survives compaction and session resets: read it first, write to it as you work.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links to the pages you\nneed. Prefer the wiki over re-deriving knowledge from raw sources or chat history.\n\n**Write as you go (obligation during authorized work).**\n- When work produces a durable fact, decision, or hypothesis a future agent should\n  not have to rediscover, persist it to the right `{WIKI}/` page \u2014 never leave it\n  only in chat.\n- This applies to sessions doing real work. In read-only, review, or audit\n  sessions, do NOT write to the wiki; report instead.\n- Capture full-fidelity source material under `{WIKI}/raw/`; keep synthesis on the\n  topic pages. Do not summarize away primary data that may be needed verbatim.\n- Keep inference separate from evidence: working theories in `hypotheses.md`,\n  confirmed observations in `evidence-matrix.md` (investigative repos).\n- Cite every claim (local path, URL, or thread ref). Mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML\nfrontmatter with `type`, `title`, `description` (one distinguishing single-line\nsentence) required \u00b7 a per-directory `index.md`, updated whenever a page is added\nor removed \u00b7 relative links only between pages (external URLs under `## Sources`) \u00b7\nrewrite inbound links when renaming a page \u00b7 retrieval is files + grep + index.md \u2014\nnever add embeddings, BM25, rerankers, or alias indexes to this wiki.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents are\nread-only: they inspect and report; they never write wiki files.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the\nsame unit of work; if a change truly has no knowledge impact, say so with a\n`## [YYYY-MM-DD] no-impact | <why>` line in `{WIKI}/log.md`. The changelog is\n`{WIKI}/log.md` (newest first, `## [YYYY-MM-DD] kind | Title`). Under Claude Code,\nhooks auto-log session edits and gate stopping; under other agents (Codex etc.)\nthere are no hooks \u2014 append log entries yourself and validate with\n`python3 .okf/lint.py lint` before finishing substantial work. The git pre-commit\nhook and CI lint (where installed) enforce this for every agent.\n<!-- /okf:contract v1 -->\n", "<!-- okf:contract v2 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo keeps a durable, agent-facing knowledge base under `{WIKI}/`. It survives compaction and\nsession resets: read it first, write to it as you work. It routes; it does not summarize the code.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links. Prefer the wiki over re-deriving\nknowledge from raw sources or chat history.\n\n**Write as you go (during authorized work).**\n- A durable fact, decision, or hypothesis a future agent should not rediscover goes to the right\n  `{WIKI}/` page in the same unit of work \u2014 never only into chat, and never into your private\n  auto-memory (that is for your own preferences; repo knowledge belongs here, shared and tracked).\n- Read-only, review, or audit sessions do NOT write to the wiki; they report.\n- Capture full-fidelity source material under `{WIKI}/raw/` and `git add` it; keep synthesis on\n  the topic pages. Untracked captures do not survive `git clean` and never satisfy the gates.\n- Keep inference separate from evidence (`hypotheses.md` vs `evidence-matrix.md` in investigative\n  repos). Cite every claim (local path, URL, or thread ref); mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML frontmatter with\n`type`, `title`, `description` (one distinguishing single-line sentence) \u00b7 a per-directory `index.md`\nupdated whenever a page is added or removed \u00b7 relative links only \u00b7 rewrite inbound links on rename \u00b7\nretrieval is files + grep + index.md \u2014 no embeddings, BM25, rerankers, or alias indexes here.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents inspect and report only.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the same commit; if a\nchange truly has no knowledge impact, say so with `## [YYYY-MM-DD] no-impact | <why>` in\n`{WIKI}/log.md` dated today, or an `Okf-Impact: none` commit trailer. `{WIKI}/log.md` is the event\nlog (newest first, `## [YYYY-MM-DD] kind | Title`).\n\n**Maintenance goes through the skill.** To update, lint, audit, repair or migrate this knowledge base,\nrun `/okf` (the okf skill) instead of editing its structure by hand \u2014 it knows the review anchor,\nthe lint and the hooks. Never build a second knowledge base beside this one.\n\n**What is mechanized, honestly.** Under Claude Code and Codex, hooks in `.claude/settings.json` /\n`.codex/hooks.json` print this pointer, auto-log page edits, and block stopping while code changed\nthis session (uncommitted OR committed) with no wiki or log entry. The git hooks lint staged pages\n(errors block), warn on code-only commits, and advance the review anchor when a commit touches the\nwiki; CI re-runs the same lint. None of these judge knowledge quality \u2014 that is your job. Under an\nagent without hooks: append log entries yourself and run `python3 .okf/lint.py lint` before\nfinishing. `.okf/` is repo-controlled code that runs on every edit, stop, and commit \u2014 review it as\nyou would `husky/` or CI config.\n<!-- /okf:contract v2 -->\n")
+CONTRACT_RE = re.compile(r"<!-- okf:contract v(\d+) -->.*?<!-- /okf:contract v\d+ -->\n?", re.S)
+KEPT_HEADING = "## Repo-specific rules kept from the previous okf contract"
+
+
+def _norm(line):
+    return re.sub(r"\s+", " ", line).strip()
+
+
+def _contract_template(args):
+    cands = []
+    if "--template" in args and args.index("--template") + 1 < len(args):
+        cands.append(args[args.index("--template") + 1])
+    cands += [os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates", "agents-contract.md"),
+              os.path.expanduser("~/.claude/skills/okf/templates/agents-contract.md"),
+              os.path.expanduser("~/.codex/skills/okf/templates/agents-contract.md")]
+    for c in cands:
+        if os.path.isfile(c):
+            return c
+    return None
+
+
+def run_refresh_contract(args):
+    root = chdir_repo_root()
+    if not root:
+        print("okf refresh-contract: not a git repository")
+        return 1
+    wiki = find_wiki_dir(load_config()) or "wiki"
+    tpath = _contract_template(args)
+    if not tpath:
+        print("okf refresh-contract: no contract template found — run the skill's copy (scripts/okf_lint.py) or pass --template")
+        return 1
+    template = read_text(tpath).replace("{WIKI}", wiki)
+    if not template.endswith("\n"):
+        template += "\n"
+    new_v = int(re.search(r"okf:contract v(\d+)", template).group(1))
+    try:
+        agents = read_text("AGENTS.md")
+    except OSError:
+        print("okf refresh-contract: no AGENTS.md")
+        return 1
+    m = CONTRACT_RE.search(agents)
+    if not m:
+        print("okf refresh-contract: AGENTS.md has no okf contract block — bootstrap or repair installs one")
+        return 1
+    old_v = int(m.group(1))
+    if old_v > new_v:
+        print("okf refresh-contract: AGENTS.md carries contract v%d, newer than this template (v%d) — use a newer okf" % (old_v, new_v))
+        return 1
+    if old_v == new_v:
+        same = [_norm(l) for l in m.group(0).splitlines() if l.strip()] == [_norm(l) for l in template.splitlines() if l.strip()]
+        print("okf refresh-contract: contract already v%d%s" % (new_v, "" if same else
+              " but customized — not refreshed (a same-version difference is a customization; report it)"))
+        return 0
+    code, st = git("status", "--porcelain", "--", "AGENTS.md", strip=False)
+    if code == 0 and st.strip():
+        print("okf refresh-contract: AGENTS.md has uncommitted changes — refusing to edit someone's work in progress; "
+              "commit or stash them, then re-run")
+        return 1
+    known = {_norm(l) for t in OLD_CONTRACTS + (template,) for l in t.replace("{WIKI}", wiki).splitlines()}
+    # keep every paragraph that contains a non-template line, whole, so the kept text still reads as sentences
+    body = re.sub(r"\s*<!-- /?okf:contract v\d+ -->\s*", "\n\n", m.group(0))
+    kept = [para.strip("\n") for para in re.split(r"\n\s*\n", body)
+            if any(l.strip() and _norm(l) not in known for l in para.splitlines())]
+    block = template
+    if kept:
+        block += "\n" + KEPT_HEADING + "\n\n" + "\n\n".join(kept) + "\n"
+        if not m.group(0).endswith("\n"):
+            block = block.rstrip("\n")
+    new = agents[:m.start()] + block + agents[m.end():]
+    tmp = "AGENTS.md.okf-tmp"
+    with open(tmp, "w", encoding="utf-8", newline="") as f:
+        f.write(new)
+    os.replace(tmp, "AGENTS.md")
+    print("okf refresh-contract: contract v%d -> v%d; %s" % (old_v, new_v, (
+        "%d paragraph(s) with repo-specific text kept below it under '%s' — leave them as they are: they are the "
+        "repo's own rules, and trimming paragraphs that look covered dropped repo-specific clauses in evaluation"
+        % (len(kept), KEPT_HEADING)) if kept else "the old block was okf template text only"))
+    return 0
+
+
 USAGE = """okf lint %s — usage: python3 .okf/lint.py <subcommand> [flags]
   lint [--quiet]                       structure guard (exit 1 on errors)
   noop-check                           CURRENT / STALE (per-commit) / NO-STATE
@@ -1438,6 +1566,7 @@ USAGE = """okf lint %s — usage: python3 .okf/lint.py <subcommand> [flags]
   pre-commit | post-commit | post-rewrite   git hooks
   install-hooks <fragment.json> [--target claude|codex]
   claims [--n 12] [--seed S]           truth-audit sample (JSON); read-only
+  refresh-contract [--template PATH]   replace an older contract block, keeping repo-specific lines
 """ % OKF_LINT_VERSION
 
 def main():
@@ -1469,6 +1598,8 @@ def main():
         return run_install_hooks(frag, target=target)
     if cmd == "claims":
         return run_claims(args)
+    if cmd == "refresh-contract":
+        return run_refresh_contract(args)
     if cmd == "lint" or cmd.startswith("-"):
         return run_lint(quiet="--quiet" in args)
     print("okf: unknown subcommand %r\n%s" % (cmd, USAGE))
