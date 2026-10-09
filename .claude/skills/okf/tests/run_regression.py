@@ -683,5 +683,20 @@ code, out = lint(d, "claims", "--n", "16", "--seed", "3")
 pages = [c["page"] for c in json.loads(out)["claims"]]
 check("claims spreads the sample across pages (one long page cannot fill it)", pages.count("concepts/huge.md") <= 4 and len(set(pages)) >= 5, str(pages))
 
+
+# ── 150. session-start announces a newer installed skill (1.4.1: plain `/okf` left a two-versions-old .okf/ in place)
+d = mkrepo("upgradenotice")
+fake_home = tempfile.mkdtemp(prefix="okf-reg-home-")
+os.makedirs(os.path.join(fake_home, ".claude", "skills", "okf", "scripts"))
+w(fake_home, ".claude/skills/okf/scripts/okf_lint.py", 'OKF_LINT_VERSION = "9.9.9"\n')
+env = dict(os.environ, HOME=fake_home)
+r = subprocess.run([sys.executable, os.path.join(d, ".okf", "lint.py"), "session-start"], cwd=d, input='{"source":"startup"}',
+                   capture_output=True, text=True, env=env, timeout=60)
+check("session-start announces a newer installed okf skill", "installed okf skill is 9.9.9" in r.stdout and "run /okf to upgrade" in r.stdout, r.stdout)
+w(fake_home, ".claude/skills/okf/scripts/okf_lint.py", 'OKF_LINT_VERSION = "0.0.1"\n')
+r = subprocess.run([sys.executable, os.path.join(d, ".okf", "lint.py"), "session-start"], cwd=d, input='{"source":"startup"}',
+                   capture_output=True, text=True, env=env, timeout=60)
+check("...and stays quiet when the installed skill is older", "run /okf to upgrade" not in r.stdout, r.stdout)
+
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

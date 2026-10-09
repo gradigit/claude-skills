@@ -1,5 +1,29 @@
 # Changelog — okf skill
 
+## 1.4.1 (2026-10-09)
+
+From an upgrade rehearsal: `/okf` run unattended on copies of the four production repos (still on okf 1.2.3), with
+their real uncommitted work overlaid; graded on lint/runner/hooks upgraded, contract refreshed, Codex and git
+hooks present, no page lost, lint clean, others' uncommitted files untouched and uncommitted.
+
+- **Upgrade first, every run.** On 1.4.0, plain `/okf` routed two current-looking repos to `update` and left their
+  two-versions-old `.okf/` (old Stop gate included) in place (8/14 and 7/14 checks); in one of them the old Stop
+  gate then fired on the user's pre-existing uncommitted source files and the agent spent 13 minutes on it. Every
+  run now compares the repo's `OKF_LINT_VERSION` with the skill's and upgrades first (Repair steps 2–3, committed
+  on its own; audit only reports). Repair keeps a githook that differs from the template (a project gate).
+- **Session-start upgrade notice.** From 1.4.1 on, the SessionStart hook says when an installed okf skill
+  (Claude or Codex copy) is newer than the repo's `.okf/`, so later upgrades are not left to chance.
+- **Others' uncommitted work is off-limits** (invariant 9): never edit, stage or commit a file that already holds
+  uncommitted changes the agent did not make; do the rest and list the skipped steps. On 1.4.0 one run edited
+  AGENTS.md, `.gitignore` and 11 pages that held a parallel session's uncommitted work.
+
+Rehearsal on 1.4.1: 14/14, 14/14, 14/14 and 13/14 (the one miss is the agent correcting a stale count in AGENTS.md,
+"30" to "34" scenes, verified against the code). Where AGENTS.md held others' work the contract refresh was left
+open and reported. No-regression pass on 1.4.1: update-stale 9/9, fresh-bootstrap 28/28, repair-drifted 11/11,
+migrate-legacy-ignored 13/13, ship-crosspage-hard 9/9, audit-truth with no false alarm. Codex parity (1.4.0,
+codex exec): ship-crosspage-hard 9/9 ×3, audit-truth every sampled planted fact reported, no false alarm, read-only.
+Regression suite: 130 → 132.
+
 ## 1.4.0 (2026-10-03)
 
 **Truth check in `/okf audit`.** Lint can only check a wiki's shape. A production audit (four repos, 600 claims

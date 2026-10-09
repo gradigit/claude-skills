@@ -46,7 +46,7 @@ import subprocess
 import sys
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.4.0"
+OKF_LINT_VERSION = "1.4.1"
 CONTRACT_VERSION = 3          # templates/agents-contract.md marker; older blocks in AGENTS.md are refreshed by /okf
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
@@ -985,6 +985,10 @@ def run_post_rewrite():
             return 0
     return 0
 
+def _version_tuple(v):
+    return tuple(int(x) for x in re.findall(r"\d+", v or "")[:3])
+
+
 def run_session_start():
     """SessionStart hook (Claude Code and Codex): prints the pointer (stdout reaches the model for
     this event) and records the session base HEAD so the Stop gate can see commits made during
@@ -1019,6 +1023,19 @@ def run_session_start():
             pc_ok = False
         if (hp_code != 0 or not hp) and not pc_ok:
             print("okf: git hooks are not installed in this clone — run /okf (or: git config core.hooksPath .okf/githooks).")
+    # an installed skill newer than this repo's copy: say so every session, or the upgrade never happens (eval: plain
+    # `/okf` on a current wiki ran an update and left a two-versions-old .okf/ in place)
+    newest = None
+    for cand in ("~/.claude/skills/okf/scripts/okf_lint.py", "~/.codex/skills/okf/scripts/okf_lint.py"):
+        try:
+            m = re.search(r'OKF_LINT_VERSION = "([0-9.]+)"', read_text(os.path.expanduser(cand)))
+        except OSError:
+            continue
+        if m and _version_tuple(m.group(1)) > _version_tuple(OKF_LINT_VERSION) and (not newest or _version_tuple(m.group(1)) > _version_tuple(newest)):
+            newest = m.group(1)
+    if newest:
+        print("okf: this repo's .okf/ is okf %s; the installed okf skill is %s — run /okf to upgrade lint, hooks and contract."
+              % (OKF_LINT_VERSION, newest))
     skill_copy = os.path.expanduser("~/.claude/skills/okf/scripts/okf_lint.py")
     try:
         if os.path.isfile(skill_copy):

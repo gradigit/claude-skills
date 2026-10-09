@@ -2,7 +2,7 @@
 name: okf
 description: Bootstraps and maintains the agent knowledge base (OKF / Karpathy LLM-wiki) in a repo, and is the only correct way to change that wiki's structure: use it whenever the user asks to bootstrap, set up, create, migrate, repair, lint, audit or update a wiki or knowledge base for agents, asks whether the wiki is up to date or rotting, or mentions OKF, llm-wiki, the AGENTS.md contract or `.okf/`. Auto-detects repo state and routes to bootstrap (value-gated, full or lite), update, lint, audit, migrate or repair; installs the AGENTS.md contract, Claude Code and Codex hooks, git hooks, a git-tracking guard and a stdlib lint. Never hand-roll a knowledge base instead of using this skill. Do NOT use for ordinary documentation work (READMEs, docstrings, API docs) that does not involve the agent-maintained knowledge base.
 argument-hint: "[bootstrap|update|lint|audit|migrate|repair]"
-version: "1.4.0"
+version: "1.4.1"
 ---
 
 # OKF — bootstrap & maintain an agent knowledge base
@@ -36,6 +36,7 @@ An explicit argument overrides detection: `/okf bootstrap|update|lint|audit|migr
 6. **Copy-first migration.** Never move, delete or overwrite existing docs or agent files without a shown plan and explicit confirmation.
 7. **Retrieval is files + grep + index.md.** No embeddings, BM25, rerankers or alias indexes by default (reference.md §7 has the one sanctioned opt-in and the honest cost note).
 8. **Mechanize what can be mechanized; be honest about the rest.** Log appends, lint, gates and the anchor fire from hooks and scripts. Knowledge quality cannot be mechanized.
+9. **Other people's uncommitted work is off-limits.** Run `git status` first. Never edit, stage or commit a file that already has uncommitted changes you did not make (a parallel session's or the user's work in progress); do everything else, then list the skipped steps and ask the user to commit or stash and re-run `/okf`.
 
 ## Detection (run first, always)
 
@@ -47,6 +48,8 @@ Priority order, first match wins. Auto-detect the wiki dir among `wiki/`, `docs/
 | 2 | Partial / drifted | Wiki exists but contract, delegation, `.okf/`, or hooks missing; or CLAUDE.md and AGENTS.md are diverged regular files with real content | `repair` |
 | 3 | Legacy / foreign wiki | `docs/llm-wiki/` without frontmatter, `openwiki/`, `droid-wiki/`, flat dated `research-*.md`, or ANY substantial pre-OKF knowledge dir (`architect/`, `research/`, `notes/`, dated reports) | `migrate` |
 | 4 | Nothing | none of the above | `bootstrap` |
+
+**Machinery version, every run:** compare `grep -m1 OKF_LINT_VERSION .okf/lint.py` with the skill's own `scripts/okf_lint.py`. If the repo's copy is older, upgrade first — §Repair steps 2–3 (contract refresh, then `.okf/` lint, runner, githooks, Claude and Codex hook merge, gitignore entries) and commit it on its own — then run the routed mode. `audit` only reports it. In an eval rehearsal, plain `/okf` on two current-looking repos ran an update and left a two-versions-old `.okf/` (old Stop gate included) in place.
 
 Always also check: `git rev-parse --show-toplevel` succeeds (no git → bootstrap must `git init` first) and the wiki path is tracked (`git check-ignore`, `git status --porcelain --ignored`). Namespace note: other tools also use `.okf/` (okf-skills' bundle dir) and `/okf`; if `.okf/` exists without `lint.py` + `config.json`, it is not ours — stop and ask.
 
@@ -107,7 +110,7 @@ Report, change nothing.
 
 1. Run `audit` first and show the gap list. Confirm scope before changing anything.
 2. **Reconcile AGENTS.md/CLAUDE.md drift:** show both; merge the union of non-duplicate content into AGENTS.md; a contract block whose marker version is OLDER than the template's (`<!-- okf:contract v1 -->` vs the template's v3; lint warns) is **outdated — show the diff and, with confirmation, refresh it to the template, carrying over lines the repo added**; a block at the current version whose text differs is a **customization — report it, do not refresh it**; then, with confirmation, replace CLAUDE.md with the delegation.
-3. Add missing pieces in dependency order: `.okf/` (lint, runner, config, githooks) → git-tracking fix → git hooks → Claude and Codex hooks merge → missing `index.md`/`log.md` (thin, from existing pages only). Existing well-formed pages stay byte-identical.
+3. Add missing pieces in dependency order: `.okf/` (lint, runner, config, githooks) → git-tracking fix → git hooks → Claude and Codex hooks merge → missing `index.md`/`log.md` (thin, from existing pages only). Existing well-formed pages stay byte-identical. Upgrading an older `.okf/`: re-copy lint, runner and githooks from the skill, but a githook whose content differs from the okf template carries a project gate — keep it (or move its gate into `pre-commit.local`, shown first); `config.json` and `pre-commit.local` stay.
 4. Frontmatter backfill for existing pages: propose `type`/`title`/`description` per page as a shown plan; apply on confirmation.
 5. Lint, commit, stamp; show output.
 
@@ -126,4 +129,4 @@ Identical files, contract and hooks. `.codex/hooks.json` carries the same Sessio
 
 Update when: (1) the user corrects a flow; (2) OKF spec moves past v0.2 or renames reserved files (config makes reserved names parameters); (3) lint changes — keep `scripts/okf_lint.py` and repo copies in sync (`lintVersion` is stamped in state files; re-copy on the next `/okf` run per repo); (4) a production repo patches `.okf/` locally — upstream it.
 
-Current version: 1.4.0 — see [CHANGELOG.md](CHANGELOG.md) for the production evidence behind each change.
+Current version: 1.4.1 — see [CHANGELOG.md](CHANGELOG.md) for the production evidence behind each change.

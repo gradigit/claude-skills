@@ -129,3 +129,13 @@ say CURRENT) and two claims were wrong when written
 - [ ] Every sampled sentence gets a verdict row; each `wrong` quotes the contradicting line
 - [ ] The planted wrong facts that were sampled are reported wrong; no true fact is reported wrong
 - [ ] Nothing in the repo changes; fixes are left to `/okf update`
+
+## Scenario 18: Upgrade an older repo (1.4.1)
+**Given** a bootstrapped repo whose `.okf/lint.py` is older than the skill (contract v1, no runner, no Codex hooks),
+with someone else's uncommitted changes in some files
+**When** user says "/okf"
+**Then**
+- [ ] `.okf/` is upgraded first (lint, runner, githooks; project gates in githooks kept), Claude and Codex hooks
+  merged, contract refreshed (unless AGENTS.md holds others' uncommitted work), committed on its own
+- [ ] Files with others' uncommitted changes are neither edited nor committed; the skipped steps are listed
+- [ ] Then the routed mode runs as usual
