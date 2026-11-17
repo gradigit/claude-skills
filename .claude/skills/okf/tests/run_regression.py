@@ -962,5 +962,17 @@ a = open(os.path.join(d, "AGENTS.md")).read()
 check("refresh-contract upgrades a stock v3 block to v4 with nothing kept", code == 0 and "okf:contract v4" in a and "The code wins" in a
       and "Repo-specific rules kept" not in a, out)
 
+# ── 180. 1.5.1: legacy session-track is a silent no-op; refresh-contract tolerates ASCII hyphens for em dashes
+d = mkrepo("sessiontrack")
+code, out = lint(d, "session-track", stdin="{}")
+check("legacy session-track (a pre-1.5 local patch) exits 0 silently", code == 0 and out.strip() == "", "code=%s %s" % (code, out))
+d = mkrepo("asciidash")
+v1_ascii = mod["OLD_CONTRACTS"][0].replace("{WIKI}", "wiki").replace("\u2014", "-")
+w(d, "AGENTS.md", "# Repo\n\n" + v1_ascii); _commit(d, "v1 contract retyped with hyphens")
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+a = open(os.path.join(d, "AGENTS.md")).read()
+check("refresh-contract treats a stock v1 block retyped with ASCII hyphens as template text", code == 0 and "template text only" in out
+      and "Repo-specific rules kept" not in a, out)
+
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

@@ -1,5 +1,20 @@
 # Changelog — okf skill
 
+## 1.5.1 (2026-11-18)
+
+From rolling 1.5.0 out to five repos the same day.
+
+- **`upgrade-check` knows 1.5.0.** The published 1.5.0 `lint.py` and runner hashes are now in the known-release
+  tables; without them the next release's `upgrade-check` would have reported every 1.5.0 repo as locally patched.
+  SKILL.md Self-Evolution gains the release step.
+- **`session-track` is accepted as a silent no-op.** A repo with a locally patched pre-1.5 lint had hook commands
+  calling it; sessions already running keep their hook snapshot until restart, and 1.5.0 answered them with exit 2
+  on every tool call.
+- **`refresh-contract` treats ASCII hyphens and em dashes alike.** One repo's stock v1 block had been retyped with
+  hyphens, so the refresh kept all of it as three "repo-specific" paragraphs.
+
+Regression suite: 174 → 176.
+
 ## 1.5.0 (2026-11-18)
 
 Fixes from an independent re-evaluation of the skill and its production fleet (2026-11-17). Inputs: a cold

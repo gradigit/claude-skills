@@ -58,7 +58,7 @@ import sys
 import time
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.5.0"
+OKF_LINT_VERSION = "1.5.1"
 CONTRACT_VERSION = 4          # templates/agents-contract.md marker; older blocks in AGENTS.md are refreshed by /okf
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
@@ -79,9 +79,13 @@ KNOWN_LINT_RELEASES = {
     "9e5f31fb90cfe40b2b2aae5769e0bb519f1e416fbcd53f133dba6eec2055a529": "1.4.0",
     "ee96ed1ad30df16d4e7904d6c285cf41173dd2cf6dd20871509909dab784bf4a": "1.4.1",
     "9e008759df4ccec38cc88b30cb78d2286fe224afb13e7b88db2e801298df7a88": "1.4.2",
+    "fa2df856ef6c334194d5a4746756b96b6cd2773f3499df0ddb191238a38e7245": "1.5.0",
+    # RELEASE CHECKLIST: when publishing a new lint, add the PREVIOUS published version's hash here, or
+    # upgrade-check reports every repo on that version as locally patched.
 }
 KNOWN_TEMPLATE_HASHES = {   # earlier published runner/githook templates (the current ones are hashed from templates/)
-    "okf-py.sh": {"ae938bf1dfed71378804996aff59df677def990bf58b0ca6de624640c3d7fc7d"},
+    "okf-py.sh": {"ae938bf1dfed71378804996aff59df677def990bf58b0ca6de624640c3d7fc7d",
+                  "bdff0591d5adf99e62728d04d4e0eb41f81fc9bdfa9b816c209b60c51a59eeb3"},
     "pre-commit": {"2f723f203cba2699b399644e9ca4097bd3a157000301019d8070200c6bb4b6e4",
                    "882d8b3255d36db95bf521f0966ffefc2785b71fbd9bdf6f2e707d7fda6694ae",
                    "89296bf3612ab95f09fdc945c77edbdc3992df082eac3f056c7b56f3d30f0501",
@@ -1814,7 +1818,9 @@ KEPT_HEADING = "## Repo-specific rules kept from the previous okf contract"
 
 
 def _norm(line):
-    return re.sub(r"\s+", " ", line).strip()
+    # dashes normalised: a contract retyped with ASCII hyphens for em dashes is still template text (2026-11:
+    # one repo's stock v1 block came back as three "repo-specific" paragraphs because of exactly that)
+    return re.sub(r"\s+", " ", line.replace("\u2014", "-").replace("\u2013", "-")).strip()
 
 
 def _contract_template(args):
@@ -1932,6 +1938,10 @@ def main():
         return run_install_hooks(frag, target=target, replace_custom="--replace-custom" in args)
     if cmd == "upgrade-check":
         return run_upgrade_check()
+    if cmd == "session-track":
+        # legacy: a locally patched pre-1.5 lint offered per-tool-call attribution under this name; sessions that
+        # started before an upgrade keep calling it from their hook snapshot until they restart. Accept silently.
+        return 0
     if cmd == "claims":
         return run_claims(args)
     if cmd == "refresh-contract":

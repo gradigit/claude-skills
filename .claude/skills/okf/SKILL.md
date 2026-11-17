@@ -2,7 +2,7 @@
 name: okf
 description: Bootstraps and maintains the agent knowledge base (OKF / Karpathy LLM-wiki) in a repo, and is the only correct way to change that wiki's structure: use it whenever the user asks to bootstrap, set up, create, migrate, repair, lint, audit or update a wiki or knowledge base for agents, asks whether the wiki is up to date or rotting, or mentions OKF, llm-wiki, the AGENTS.md contract or `.okf/`. Auto-detects repo state and routes to bootstrap (value-gated, full or lite), update, lint, audit, migrate or repair; installs the AGENTS.md contract, Claude Code and Codex hooks, git hooks, a git-tracking guard and a stdlib lint. Never hand-roll a knowledge base instead of using this skill. Do NOT use for ordinary documentation work (READMEs, docstrings, API docs) that does not involve the agent-maintained knowledge base.
 argument-hint: "[bootstrap|update|lint|audit|migrate|repair]"
-version: "1.5.0"
+version: "1.5.1"
 ---
 
 # OKF — bootstrap & maintain an agent knowledge base
@@ -127,6 +127,6 @@ Identical files, contract and hooks. `.codex/hooks.json` carries the same Sessio
 
 ## Self-Evolution
 
-Update when: (1) the user corrects a flow; (2) OKF spec moves past v0.2 or renames reserved files (config makes reserved names parameters); (3) lint changes — keep `scripts/okf_lint.py` and repo copies in sync (`lintVersion` is stamped in state files; re-copy on the next `/okf` run per repo); (4) a production repo patches `.okf/` locally — upstream it.
+Update when: (1) the user corrects a flow; (2) OKF spec moves past v0.2 or renames reserved files (config makes reserved names parameters); (3) lint changes — keep `scripts/okf_lint.py` and repo copies in sync (`lintVersion` is stamped in state files; re-copy on the next `/okf` run per repo); (4) a production repo patches `.okf/` locally — upstream it; (5) on every lint release, add the previous published `scripts/okf_lint.py` sha256 to `KNOWN_LINT_RELEASES` (and changed runner/githook hashes to `KNOWN_TEMPLATE_HASHES`), or `upgrade-check` flags repos on that version as locally patched.
 
-Current version: 1.5.0 — see [CHANGELOG.md](CHANGELOG.md) for the production evidence behind each change.
+Current version: 1.5.1 — see [CHANGELOG.md](CHANGELOG.md) for the production evidence behind each change.
