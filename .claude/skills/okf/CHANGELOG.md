@@ -1,5 +1,18 @@
 # Changelog — okf skill
 
+## 1.4.3 (2026-11-17)
+
+Test-only release. `scripts/okf_lint.py` is unchanged and `OKF_LINT_VERSION` stays 1.4.2, so no repo needs an upgrade.
+
+- **Regression test R2-26 was stale and failed on case-insensitive filesystems.** It calls the hook with a
+  case-different path and expects an auto-log entry exactly when the filesystem is case-insensitive, but it called
+  the hook on a committed, unmodified page. Since 1.3.4 the auto-log records only uncommitted edits, so nothing could
+  be logged: the check passed vacuously on a case-sensitive filesystem and failed on macOS (139 of 140). The test now
+  leaves an uncommitted edit before the hook call. The hook was correct all along: with an uncommitted edit, 1.4.2
+  logs a case-different path on macOS.
+
+Regression suite: 140 of 140 on macOS (case-insensitive APFS) and on a case-sensitive APFS volume.
+
 ## 1.4.2 (2026-10-09)
 
 Two defects found while upgrading the production repos with 1.4.1.

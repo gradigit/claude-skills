@@ -202,6 +202,11 @@ check("unicode path readable in noop-check", "日本語" in out and "\\346" not 
 # (macOS APFS and NTFS are case-insensitive; so is WSL /mnt/c under linux; ext4 is not)
 d = mkrepo("caseins")
 probe_ci = os.path.exists(os.path.join(d, "WIKI", "concepts", "good.md"))
+# The auto-log records only UNCOMMITTED edits (1.3.4), so leave one. Called on the committed, unmodified page this
+# check could never log: it passed vacuously on a case-sensitive filesystem and failed on a case-insensitive one.
+# No hook baseline exists here (no session-start ran), so the page reaches the hook only through the payload path.
+with open(os.path.join(d, "wiki", "concepts", "good.md"), "a", encoding="utf-8") as f:
+    f.write("One more sentence, left uncommitted so the auto-log has something to record.\n")
 payload = json.dumps({"tool_input": {"file_path": os.path.join(d, "WIKI", "concepts", "good.md")}})
 code, out = lint(d, "hook", stdin=payload)
 logtxt = open(os.path.join(d, "wiki/log.md")).read()
