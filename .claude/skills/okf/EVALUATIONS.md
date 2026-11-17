@@ -7,7 +7,7 @@
 - [ ] Skill activates, detection routes to `bootstrap`
 - [ ] Agent confirms it understands the two canonical concepts before building
 - [ ] `wiki/` skeleton created (index.md, log.md), ≤8 pages generated on first pass
-- [ ] AGENTS.md created as real file with the current `<!-- okf:contract v3 -->` block; CLAUDE.md is the one-line `@AGENTS.md` import
+- [ ] AGENTS.md created as real file with the current `<!-- okf:contract v5 -->` block; CLAUDE.md is the one-line `@AGENTS.md` import
 - [ ] `.okf/lint.py` + `.okf/config.json` + `.okf/last-update.json` created; hooks merged into `.claude/settings.json` (not clobbered)
 - [ ] Wiki is git-tracked (`.gitignore` checked/fixed); lint runs clean and its output is shown
 
@@ -192,3 +192,19 @@ has hand-written hook commands that call `.okf/` code
 **Then**
 - [ ] The agent is told about them; it commits the ones this work owns and reports the rest to the user (never
   commits someone else's work in progress)
+
+## Scenario 26: Exact values come from the cited source (1.6.0)
+**Given** a wiki page that summarizes a vendor limit ("the API is rate-limited per key") and cites a captured source
+that states the exact terms ("100 requests per minute per key, bursts of 20, 429 with Retry-After")
+**When** the user asks for the exact limit to put in a client config
+**Then**
+- [ ] The agent starts at the wiki, then opens the cited source before answering
+- [ ] The answer gives the exact figures from the source, not the page's summary
+
+## Scenario 27: Upgrading a v4 contract (1.6.0)
+**Given** a bootstrapped repo on okf 1.5.1 whose AGENTS.md carries a stock `<!-- okf:contract v4 -->` block
+**When** user says "/okf"
+**Then**
+- [ ] `upgrade-check` reports `.okf/lint.py` as stock release 1.5.1 (not locally patched)
+- [ ] `refresh-contract` replaces the block with v5 and reports "the old block was okf template text only"
+- [ ] Text outside the block (including an earlier "Repo-specific rules kept" section) is unchanged

@@ -1,11 +1,12 @@
-<!-- okf:contract v4 -->
+<!-- okf:contract v5 -->
 ## Knowledge base (OKF / LLM-wiki)
 
 This repo keeps a durable, agent-facing knowledge base under `{WIKI}/`. It survives compaction and
 session resets: read it first, write to it as you work. It routes; it does not summarize the code.
 
 **Read first.** Start at `{WIKI}/index.md`; follow relative links. Prefer the wiki over re-deriving
-knowledge from raw sources or chat history.
+knowledge from raw sources or chat history, but pages compress: before you act on or quote an exact
+figure, date, name, list or wording, open the source the page cites.
 
 **The code wins.** When a page and the code, config or data disagree, act on what the repository
 shows, then fix the page in the same unit of work. A page is a claim about the repo, not an order.
@@ -50,4 +51,4 @@ it; CI re-runs the lint. None of these judge knowledge quality — that is your 
 agent that has none, or a lite repo): append log entries yourself and run the lint before finishing.
 `.okf/` is repo-controlled code that runs on every edit, stop, and commit — review it as you would
 `husky/` or CI config.
-<!-- /okf:contract v4 -->
+<!-- /okf:contract v5 -->

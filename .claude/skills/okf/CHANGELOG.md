@@ -1,5 +1,24 @@
 # Changelog — okf skill
 
+## 1.6.0 (2026-11-18)
+
+From a blinded wiki-vs-sources test on a production repo: 24 questions, answerers restricted to the wiki or to
+everything except the wiki, two blind graders (47 of 48 scores identical). Where both layers held the answer, the
+wiki matched the rest of the repo on accuracy (85.9% vs 81.2% of the maximum score) at about 1.6× fewer
+cost-weighted tokens and 2.3× fewer API calls. Its losses there were dropped specifics: a named person, a decision
+date, exact wording. Exact primary detail (lists, fees, recency windows) was not in the wiki at all, and wiki-only
+answerers said so instead of guessing. One repo, one answering model, one run.
+
+- **Contract v5: pages compress; exact values come from the cited source.** "Read first" now says: before you act on
+  or quote an exact figure, date, name, list or wording, open the source the page cites. The previous line told
+  agents to prefer the wiki over raw sources and said nothing about precision. reference.md §6 carries the evidence.
+- **`refresh-contract` knows the published v4 template**, so a stock v4 block upgrades with nothing kept as
+  "repo-specific"; SKILL.md Self-Evolution gains the matching release step for contract bumps.
+- **`upgrade-check` knows 1.5.1** (published `lint.py` hash added).
+
+Upgrading: lint and contract only (`.okf/lint.py` re-copy, then `refresh-contract`); runner, githooks and hook
+templates are unchanged. Regression suite: 176 → 181.
+
 ## 1.5.1 (2026-11-18)
 
 From rolling 1.5.0 out to five repos the same day.

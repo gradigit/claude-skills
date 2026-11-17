@@ -642,6 +642,9 @@ code, out = lint(d, "lint")
 check("lint warns when AGENTS.md carries an older okf contract", "contract v2" in out and "run /okf" in out, out)
 w(d, "AGENTS.md", "# A\n<!-- okf:contract v4 -->\n## Knowledge base\n<!-- /okf:contract v4 -->\n")
 code, out = lint(d, "lint")
+check("lint warns on a v4 contract once v5 is current", "contract v4" in out and "run /okf" in out, out)
+w(d, "AGENTS.md", "# A\n<!-- okf:contract v5 -->\n## Knowledge base\n<!-- /okf:contract v5 -->\n")
+code, out = lint(d, "lint")
 check("...and is quiet at the current contract version", "contract v" not in out, out)
 
 
@@ -714,11 +717,11 @@ w(d, "AGENTS.md", "# Repo\n\nRun the tests first.\n\n" + v1_text + "\n## Release
 sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "v1 contract")
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
 a = open(os.path.join(d, "AGENTS.md")).read()
-check("refresh-contract replaces a stock v1 block with the template", code == 0 and "okf:contract v4" in a and "okf:contract v1" not in a
+check("refresh-contract replaces a stock v1 block with the template", code == 0 and "okf:contract v5" in a and "okf:contract v1" not in a
       and "Repo-specific rules kept" not in a and "template text only" in out, out + a[:200])
 check("refresh-contract keeps everything outside the block", a.startswith("# Repo\n\nRun the tests first.") and a.rstrip().endswith("Tag every release."), a[-200:])
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
-check("refresh-contract is idempotent (already current)", code == 0 and "already v4" in out, out)
+check("refresh-contract is idempotent (already current)", code == 0 and "already v5" in out, out)
 d = mkrepo("refreshcustom")
 custom = v1_text.replace("<!-- /okf:contract v1 -->", "Record URL, capture time and claim status for every source in `research/`.\n\n<!-- /okf:contract v1 -->")
 w(d, "AGENTS.md", "# Repo\n\n" + custom)
@@ -726,7 +729,7 @@ sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "custom v1 contract")
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
 a = open(os.path.join(d, "AGENTS.md")).read()
 kept_at = a.find("## Repo-specific rules kept from the previous okf contract")
-check("refresh-contract keeps repo-specific contract text below the new block", code == 0 and kept_at > a.find("<!-- /okf:contract v4 -->") > 0
+check("refresh-contract keeps repo-specific contract text below the new block", code == 0 and kept_at > a.find("<!-- /okf:contract v5 -->") > 0
       and "Record URL, capture time and claim status" in a[kept_at:], out + a[-400:])
 d = mkrepo("refreshdirty")
 w(d, "AGENTS.md", "# Repo\n\n" + v1_text)
@@ -959,8 +962,8 @@ v3_text = mod["OLD_CONTRACTS"][2].replace("{WIKI}", "wiki")
 w(d, "AGENTS.md", "# Repo\n\n" + v3_text); _commit(d, "v3 contract")
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
 a = open(os.path.join(d, "AGENTS.md")).read()
-check("refresh-contract upgrades a stock v3 block to v4 with nothing kept", code == 0 and "okf:contract v4" in a and "The code wins" in a
-      and "Repo-specific rules kept" not in a, out)
+check("refresh-contract upgrades a stock v3 block to the current contract with nothing kept", code == 0 and "okf:contract v5" in a
+      and "The code wins" in a and "Repo-specific rules kept" not in a, out)
 
 # ── 180. 1.5.1: legacy session-track is a silent no-op; refresh-contract tolerates ASCII hyphens for em dashes
 d = mkrepo("sessiontrack")
@@ -973,6 +976,32 @@ code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
 a = open(os.path.join(d, "AGENTS.md")).read()
 check("refresh-contract treats a stock v1 block retyped with ASCII hyphens as template text", code == 0 and "template text only" in out
       and "Repo-specific rules kept" not in a, out)
+
+# ── 181. contract v5 (1.6.0): pages compress, so exact values come from the cited source
+# (blinded wiki-vs-sources test on a production repo: the wiki matched on shared questions but dropped specifics)
+check("the v5 template tells readers to open the cited source for exact values",
+      "open the source the page cites" in open(TEMPLATE).read() and "okf:contract v5" in open(TEMPLATE).read())
+check("OLD_CONTRACTS carries the published v4 template", len(mod["OLD_CONTRACTS"]) == 4
+      and mod["OLD_CONTRACTS"][3].startswith("<!-- okf:contract v4 -->"))
+d = mkrepo("refreshv4")
+v4_text = mod["OLD_CONTRACTS"][3].replace("{WIKI}", "wiki")
+w(d, "AGENTS.md", "# Repo\n\n" + v4_text + "\n## Repo-specific rules kept from the previous okf contract\n\nKeep the old rule.\n")
+_commit(d, "v4 contract")
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+a = open(os.path.join(d, "AGENTS.md")).read()
+check("refresh-contract upgrades a stock v4 block to v5 with nothing kept, text after the block untouched",
+      code == 0 and "template text only" in out and "okf:contract v5" in a and "okf:contract v4" not in a
+      and "open the source the page cites" in a and a.count("Repo-specific rules kept") == 1 and a.rstrip().endswith("Keep the old rule."),
+      out + a[-300:])
+d = mkrepo("refreshv4custom")
+v4_custom = v4_text.replace("**Single writer.**", "Every claim about a counterparty cites its register row.\n\n**Single writer.**")
+w(d, "AGENTS.md", "# Repo\n\n" + v4_custom); _commit(d, "customized v4 contract")
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+a = open(os.path.join(d, "AGENTS.md")).read()
+kept_at = a.find("## Repo-specific rules kept from the previous okf contract")
+check("refresh-contract keeps only the repo's own paragraph from a customized v4 block",
+      code == 0 and "1 paragraph(s)" in out and kept_at > a.find("<!-- /okf:contract v5 -->") > 0
+      and "cites its register row" in a[kept_at:] and "knowledge from raw sources or chat history." not in a[kept_at:], out + a[-400:])
 
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

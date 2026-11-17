@@ -111,6 +111,14 @@ a never-written page for two months while the old warning was ignored.
   fix the page (contract v4). Without that rule they follow the file: agents obeyed a stale
   instruction file over the code in 90.1% of choices, and one sentence giving the code precedence
   raised code-following from 4.2% to 91.4% (arXiv 2610.30571, 2026-10, synthetic projects).
+- **Pages compress; exact values come from the cited source.** Before acting on or quoting an
+  exact figure, date, name, list or wording, readers open the source the page cites (contract v5).
+  In a blinded 24-question test on a production repo (2026-11, one repo, one answering model),
+  answers from the wiki alone matched answers from the rest of the repo where both held the
+  answer, at about 1.6× fewer cost-weighted tokens, but lost points on 4 of 16 shared questions
+  by dropping specifics (a named person, a decision date, exact wording), and lacked exact
+  primary detail (lists, fees, recency windows) altogether. Wiki-only answers said "not found"
+  instead of guessing, so the fix is a reading rule, not more page text.
 - **Volatile facts carry their provenance.** An exact count, range, size or version
   ("63 items", "30,400–44,272 ticks", "schema v2") is written with the commit or date it
   was true at, or the command that reproduces it ("69 items in `data/items.json` as of
