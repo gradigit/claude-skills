@@ -24,9 +24,9 @@
 **Given** a repo with `docs/llm-wiki/` containing pages without frontmatter, and a CLAUDE.md that is a regular file with real content
 **When** user says "/okf" or "/okf migrate"
 **Then**
-- [ ] Detection routes to repair/migrate, NOT fresh bootstrap
+- [ ] Detection routes to migrate (the legacy row is checked before partial/drifted), NOT repair or a fresh bootstrap
 - [ ] A mapping plan is shown; nothing is moved, deleted, or overwritten without explicit confirmation
-- [ ] Existing CLAUDE.md content is absorbed into AGENTS.md before CLAUDE.md is replaced with a symlink (confirmed first)
+- [ ] Existing CLAUDE.md is split: instruction-shaped parts into AGENTS.md, knowledge-shaped parts into wiki pages; then CLAUDE.md becomes the one-line `@AGENTS.md` import (confirmed first)
 - [ ] Existing wiki dir is kept as the wiki dir (auto-detect wins over `wiki/` default); frontmatter backfilled
 
 ## Scenario 4: No-op short-circuit (should-trigger, edge)
@@ -46,7 +46,7 @@
 **Given** a 10-file utility-script repo with no research/knowledge dimension
 **When** user says "/okf bootstrap"
 **Then**
-- [ ] The value-bar question is asked; lite profile offered (contract + symlink + git guard + bare index, no generated pages, no state machine)
+- [ ] The value-bar question is asked; lite profile offered (contract + `@AGENTS.md` delegation + git guard + `.okf/` lint and runner + bare index, no generated pages, no state machine, no hooks)
 - [ ] Full machinery is NOT installed unless the user insists
 
 ## Scenario 7: Rebased anchor (edge — v1.0 P0 regression)
@@ -62,8 +62,8 @@
 - [ ] `state-update --mark-reviewed` advances the anchor; the next `noop-check` is CURRENT
 - [ ] A `no-impact` line is appended to log.md
 
-## Scenario 9: Codex session (parity)
-**Given** a bootstrapped repo, agent is Codex (no hooks)
+## Scenario 9: Agent without hooks (parity)
+**Given** a bootstrapped repo, agent is one without hooks (Codex before `/hooks` trust, or any other agent)
 **When** Codex does substantial work and commits
 **Then**
 - [ ] The AGENTS.md contract instructs manual log appends + lint before finishing
@@ -154,3 +154,41 @@ with someone else's uncommitted changes in some files
 **Then**
 - [ ] The Stop gate allows the stop; nothing is written to the wiki about that work; the work is untouched
 - [ ] A new code change made by the session, or a further change to one of those files, still trips the gate
+
+## Scenario 21: The anchor never jumps past unreviewed code (1.5.0, 2026-11 review)
+**Given** a bootstrapped repo where a human committed a code change that contradicts a wiki page, and an agent later
+commits an unrelated `log.md` entry
+**When** `/okf update` runs
+**Then**
+- [ ] `noop-check` is STALE and lists the human's code commit (the post-commit hook kept the anchor)
+- [ ] The contradicted page is fixed; only then does the anchor advance
+
+## Scenario 22: Upgrading a repo with locally patched machinery (1.5.0)
+**Given** a repo on an older okf whose `.okf/lint.py` matches no published release and whose `.claude/settings.json`
+has hand-written hook commands that call `.okf/` code
+**When** user says "/okf"
+**Then**
+- [ ] `upgrade-check` runs first and its REVIEW items are shown to the user
+- [ ] `.okf/lint.py` is not re-copied and hooks are not merged until the user decides; no duplicate hooks appear
+- [ ] The routed mode still runs on the existing machinery
+
+## Scenario 23: A note contradicts the code (1.5.0)
+**Given** a wiki page that says the client retries 3 times while the code retries 9 times
+**When** a normal coding task depends on the retry count
+**Then**
+- [ ] The agent acts on the code (9), not the page
+- [ ] The page is corrected in the same unit of work
+
+## Scenario 24: Advisory Stop check (1.5.0)
+**Given** a bootstrapped repo with the default config, and a session that changes code without touching the wiki
+**When** the session stops
+**Then**
+- [ ] The stop is allowed and the user sees an `okf:` notice naming the changed path
+- [ ] With `"stopGate": "block"` the same session is blocked once, then allowed (stop_hook_active)
+
+## Scenario 25: Durability (1.5.0)
+**Given** a repo whose wiki pages have uncommitted edits older than 3 days
+**When** a session starts, or the lint runs
+**Then**
+- [ ] The agent is told about them; it commits the ones this work owns and reports the rest to the user (never
+  commits someone else's work in progress)

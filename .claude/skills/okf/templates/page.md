@@ -34,4 +34,5 @@ ranges and versions with the commit/date they were true at or the command that r
      OKF v0.2 forms are equally accepted: generated: { by: <actor>, at: <ISO datetime+offset> },
        status: draft | stable | deprecated, verified: [{ by, at }], stale_after: <datetime>,
        sources: [{ id, resource, title }] with [^id] footnotes instead of [S1] + ## Sources
-     Replace every <placeholder>; lint errors on any left behind. -->
+     Replace every <placeholder>. Lint errors on placeholders left in type/title/description;
+     elsewhere (tags, source, body, Sources) nothing catches them, so check before finishing. -->

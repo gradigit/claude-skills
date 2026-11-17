@@ -23,7 +23,7 @@ def mkrepo(name, wiki="wiki", commit=True):
     os.makedirs(os.path.join(d, ".okf")); os.makedirs(os.path.join(d, wiki, "concepts"), exist_ok=True)
     shutil.copy(LINT, os.path.join(d, ".okf", "lint.py"))
     with open(os.path.join(d, ".okf", "config.json"), "w") as f:
-        json.dump({"wikiDir": wiki}, f)
+        json.dump({"wikiDir": wiki, "stopGate": "block"}, f)   # the blocking gate is the heavily tested path; advise is tested separately
     w(d, wiki + "/index.md", "# INDEX\n## Sections\n* [concepts](concepts/index.md) — core\n")
     w(d, wiki + "/log.md", "# log\n\n")
     w(d, wiki + "/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n")
@@ -347,7 +347,7 @@ def _commit(d, msg, *extra):
 # ── 130-1. Stop gate: committing code no longer bypasses it (session base from session-start)
 d = mkrepo("gatecommit")
 code, out = lint(d, "session-start", stdin='{"source":"startup"}')
-check("session-start prints the pointer and records the session base", "OKF knowledge base active" in out and os.path.isfile(os.path.join(d, ".okf/session-head")), out)
+check("session-start prints the pointer and records the session base", "OKF knowledge base active" in out and os.path.isfile(os.path.join(d, ".okf/sessions/default.json")), out)
 w(d, "src/app.py", "x=1"); _commit(d, "code only")
 code, out = lint(d, "stop-gate", stdin="{}")
 check("commit-then-stop is BLOCKED (exit 2)", code == 2 and "committed" in out, "code=%s %s" % (code, out[:120]))
@@ -365,11 +365,11 @@ lint(d, "session-start", stdin='{"source":"startup"}')
 w(d, "src/app.py", "x=1"); _commit(d, "code")
 code, out = lint(d, "stop-gate", stdin="{}")
 check("a no-impact line from a past day does not excuse today's code", code == 2, "code=%s" % code)
-w(d, "wiki/log.md", "# log\n\n## [%s] no-impact | plumbing only\n" % date.today().isoformat()); _commit(d, "log today")
 lint(d, "session-start", stdin='{"source":"startup"}')
 w(d, "src/app2.py", "y=2"); _commit(d, "code 2")
+w(d, "wiki/log.md", "# log\n\n## [%s] no-impact | plumbing only\n" % date.today().isoformat()); _commit(d, "log today")
 code, out = lint(d, "stop-gate", stdin="{}")
-check("a committed no-impact line dated today excuses this session's code commit", code == 0 and out.strip() == "{}", "code=%s %s" % (code, out[:100]))
+check("a committed no-impact line dated today, added this session, excuses this session's code commit", code == 0 and out.strip() == "{}", "code=%s %s" % (code, out[:100]))
 lint(d, "session-start", stdin='{"source":"startup"}')
 w(d, "src/app3.py", "z=3"); _commit(d, "chore", "-m", "Okf-Impact: none")
 code, out = lint(d, "stop-gate", stdin="{}")
@@ -640,7 +640,7 @@ d = mkrepo("contractver")
 w(d, "AGENTS.md", "# A\n<!-- okf:contract v2 -->\n## Knowledge base\n<!-- /okf:contract v2 -->\n")
 code, out = lint(d, "lint")
 check("lint warns when AGENTS.md carries an older okf contract", "contract v2" in out and "run /okf" in out, out)
-w(d, "AGENTS.md", "# A\n<!-- okf:contract v3 -->\n## Knowledge base\n<!-- /okf:contract v3 -->\n")
+w(d, "AGENTS.md", "# A\n<!-- okf:contract v4 -->\n## Knowledge base\n<!-- /okf:contract v4 -->\n")
 code, out = lint(d, "lint")
 check("...and is quiet at the current contract version", "contract v" not in out, out)
 
@@ -714,11 +714,11 @@ w(d, "AGENTS.md", "# Repo\n\nRun the tests first.\n\n" + v1_text + "\n## Release
 sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "v1 contract")
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
 a = open(os.path.join(d, "AGENTS.md")).read()
-check("refresh-contract replaces a stock v1 block with the template", code == 0 and "okf:contract v3" in a and "okf:contract v1" not in a
+check("refresh-contract replaces a stock v1 block with the template", code == 0 and "okf:contract v4" in a and "okf:contract v1" not in a
       and "Repo-specific rules kept" not in a and "template text only" in out, out + a[:200])
 check("refresh-contract keeps everything outside the block", a.startswith("# Repo\n\nRun the tests first.") and a.rstrip().endswith("Tag every release."), a[-200:])
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
-check("refresh-contract is idempotent (already current)", code == 0 and "already v3" in out, out)
+check("refresh-contract is idempotent (already current)", code == 0 and "already v4" in out, out)
 d = mkrepo("refreshcustom")
 custom = v1_text.replace("<!-- /okf:contract v1 -->", "Record URL, capture time and claim status for every source in `research/`.\n\n<!-- /okf:contract v1 -->")
 w(d, "AGENTS.md", "# Repo\n\n" + custom)
@@ -726,7 +726,7 @@ sh(d, "git", "add", "-A"); sh(d, "git", "commit", "-qm", "custom v1 contract")
 code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
 a = open(os.path.join(d, "AGENTS.md")).read()
 kept_at = a.find("## Repo-specific rules kept from the previous okf contract")
-check("refresh-contract keeps repo-specific contract text below the new block", code == 0 and kept_at > a.find("<!-- /okf:contract v3 -->") > 0
+check("refresh-contract keeps repo-specific contract text below the new block", code == 0 and kept_at > a.find("<!-- /okf:contract v4 -->") > 0
       and "Record URL, capture time and claim status" in a[kept_at:], out + a[-400:])
 d = mkrepo("refreshdirty")
 w(d, "AGENTS.md", "# Repo\n\n" + v1_text)
@@ -752,6 +752,215 @@ os.remove(os.path.join(d, "other.py"))
 w(d, "src.py", "x = 3  # changed again during this session\n")
 code, out = lint(d, "stop-gate", stdin="{}")
 check("...and blocks when the session changes a pre-existing uncommitted file further", code == 2 and "src.py" in out, "code=%s %s" % (code, out))
+
+# ═══════════════════════════════════════ 1.5.0 — fixes from the 2026-11 re-evaluation (deep review + fleet audit)
+def _cfg(d, **kw):
+    c = {"wikiDir": "wiki"}
+    c.update(kw)
+    w(d, ".okf/config.json", json.dumps(c))
+
+def _sess(sid, source="startup"):
+    return json.dumps({"source": source, "session_id": sid})
+
+# ── 170. honest anchor: a wiki-touching commit no longer certifies earlier code-only commits (false CURRENT)
+d = mkrepo("honestanchor")
+w(d, ".gitignore", ".okf/last-update.json\n.okf/sessions/\n"); _commit(d, "ignore state")
+lint(d, "state-update")
+anchor0 = json.load(open(os.path.join(d, ".okf/last-update.json")))["gitHead"]
+w(d, "src/frob.py", "RETRIES = 9\n"); _commit(d, "change retry budget (code only)")
+w(d, "wiki/log.md", "# log\n\n## [2026-11-17] decision | unrelated note\n- nothing about retries\n"); _commit(d, "unrelated log entry")
+code, out = lint(d, "post-commit")
+st = json.load(open(os.path.join(d, ".okf/last-update.json")))
+check("post-commit keeps the anchor when an uncertified code commit lies behind it", st["gitHead"] == anchor0 and "anchor kept" in out, out + st["gitHead"][:8])
+code, out = lint(d, "noop-check")
+check("...so noop-check stays STALE and lists the code commit", "STALE" in out and "change retry budget" in out, out)
+lint(d, "state-update", "--mark-reviewed")
+w(d, "wiki/concepts/good.md", open(os.path.join(d, "wiki/concepts/good.md")).read() + "\nNine retries since the budget change.\n"); _commit(d, "wiki follow-up")
+lint(d, "post-commit")
+check("...and advances again once everything behind it is reviewed", json.load(open(os.path.join(d, ".okf/last-update.json")))["gitHead"] == _head(d), "")
+d = mkrepo("rootstamp", commit=False)
+_commit(d, "bootstrap as the repository's first commit")
+lint(d, "post-commit")
+check("post-commit stamps a root commit (diff-tree --root)", os.path.isfile(os.path.join(d, ".okf/last-update.json")), "")
+
+# ── 171. Stop gate session identity: state keyed by session_id; resume keeps the base; pulls are not the session's
+d = mkrepo("twosessions")
+lint(d, "session-start", stdin=_sess("A"))
+w(d, "src/a.py", "x = 1\n")
+lint(d, "session-start", stdin=_sess("B"))
+code, out = lint(d, "stop-gate", stdin=json.dumps({"session_id": "A"}))
+check("a second session's start no longer erases the first session's gate", code == 2 and "src/a.py" in out, "code=%s %s" % (code, out[:120]))
+d = mkrepo("resumebase")
+lint(d, "session-start", stdin=_sess("R"))
+w(d, "src/r.py", "x = 1\n"); _commit(d, "code in the session")
+lint(d, "session-start", stdin=_sess("R", "resume"))
+code, out = lint(d, "stop-gate", stdin=json.dumps({"session_id": "R"}))
+check("resume keeps the session base, so the session's own earlier commit still counts", code == 2 and "committed" in out, "code=%s %s" % (code, out[:120]))
+remote = tempfile.mkdtemp(prefix="okf-reg-remote-")
+sh(remote, "git", "init", "-q", "--bare")
+d = mkrepo("pullnotmine")
+sh(d, "git", "remote", "add", "origin", remote); sh(d, "git", "push", "-q", "origin", "HEAD:refs/heads/main")
+mate = tempfile.mkdtemp(prefix="okf-reg-mate-")
+sh(mate, "git", "clone", "-q", remote, "c"); mc = os.path.join(mate, "c")
+sh(mc, "git", "config", "user.email", "m@m"); sh(mc, "git", "config", "user.name", "m")
+w(mc, "src/teammate.py", "y = 2\n"); sh(mc, "git", "add", "-A"); sh(mc, "git", "commit", "-qm", "teammate code"); sh(mc, "git", "push", "-q", "origin", "HEAD:main")
+lint(d, "session-start", stdin=_sess("P"))
+sh(d, "git", "pull", "-q", "--ff-only", "origin", "main")
+code, out = lint(d, "stop-gate", stdin=json.dumps({"session_id": "P"}))
+check("commits pulled from a remote are not blamed on the session", code == 0 and out.strip() == "{}", "code=%s %s" % (code, out[:120]))
+
+# ── 172. no-impact escapes are scoped to the session and to their own dated section
+d = mkrepo("oldnoimpact")
+w(d, "wiki/log.md", "# log\n\n## [%s] no-impact | another session's tooling change\n" % date.today().isoformat()); _commit(d, "log")
+lint(d, "session-start", stdin=_sess("N"))
+w(d, "src/n.py", "x = 1\n"); _commit(d, "code")
+code, out = lint(d, "stop-gate", stdin=json.dumps({"session_id": "N"}))
+check("a no-impact line written before the session started does not excuse its code", code == 2, "code=%s %s" % (code, out[:120]))
+d = mkrepo("noimpactwindow")
+w(d, "wiki/log.md", "# log\n\n## [%s] decision | today's entry\n- chose the retry budget\n\n## [2020-01-01] decision | old\n- no-impact: an old bullet\n" % date.today().isoformat()); _commit(d, "log")
+w(d, "src/w.py", "x = 1\n")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("a no-impact bullet in an older section does not count for today", code == 2, "code=%s %s" % (code, out[:120]))
+d = mkrepo("untrackeddir")
+w(d, "scratch/a.txt", "pre-existing untracked dir\n")
+lint(d, "session-start", stdin=_sess("U"))
+w(d, "scratch/b.py", "new code inside it\n")
+code, out = lint(d, "stop-gate", stdin=json.dumps({"session_id": "U"}))
+check("new work inside a pre-existing untracked directory is seen", code == 2 and "scratch/b.py" in out, "code=%s %s" % (code, out[:120]))
+
+# ── 173. advisory by default; "off"; ignorePaths
+d = mkrepo("advise")
+_cfg(d)
+w(d, "src/v.py", "x = 1\n")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("the default Stop gate advises: exit 0 with a JSON systemMessage", code == 0 and '"systemMessage"' in out and "src/v.py" in out, "code=%s %s" % (code, out[:120]))
+_cfg(d, stopGate="off")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("stopGate off allows with {}", code == 0 and out.strip() == "{}", out)
+_cfg(d, stopGate="block", ignorePaths=["*.lock", "build/"])
+os.remove(os.path.join(d, "src/v.py"))
+w(d, "poetry.lock", "x\n"); w(d, "build/out.js", "x\n")
+code, out = lint(d, "stop-gate", stdin="{}")
+check("ignorePaths keeps lockfiles and build output from demanding a wiki update", code == 0 and out.strip() == "{}", "code=%s %s" % (code, out[:120]))
+
+# ── 174. the runner and the Claude hook command resolve the repo from the project, not the current directory
+TPL = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "templates")
+d = mkrepo("hookroot")
+shutil.copy(os.path.join(TPL, "okf-py.sh"), os.path.join(d, ".okf", "okf-py.sh"))
+w(d, ".gitignore", "vendor/\n")
+_commit(d, "runner")
+nested = os.path.join(d, "vendor", "other")
+os.makedirs(os.path.join(nested, ".okf")); sh(nested, "git", "init", "-q")
+marker = os.path.join(tempfile.mkdtemp(prefix="okf-reg-marker-"), "pwned")
+w(nested, ".okf/lint.py", "open(%r, 'w').write('x')\nprint('{}')\n" % marker)
+w(nested, ".okf/okf-py.sh", "touch %s; echo '{}'\n" % marker)
+stop_cmd = json.load(open(os.path.join(TPL, "hooks-settings.json")))["hooks"]["Stop"][0]["hooks"][0]["command"]
+r = subprocess.run(["sh", "-c", stop_cmd], cwd=nested, input="{}", capture_output=True, text=True, timeout=60,
+                   env=dict(os.environ, CLAUDE_PROJECT_DIR=d))
+check("the Claude Stop hook run from inside a nested repo executes the project's runner, not the nested repo's",
+      not os.path.exists(marker) and r.stdout.strip().startswith("{"), r.stdout + r.stderr)
+r = subprocess.run(["sh", os.path.join(d, ".okf", "okf-py.sh"), "stop-gate"], cwd=nested, input="{}", capture_output=True, text=True, timeout=60)
+check("the runner resolves the repo from its own location, not the caller's cwd", not os.path.exists(marker), r.stdout + r.stderr)
+
+# ── 175. upgrade-check and install-hooks protect locally patched machinery and custom hooks
+def _upgrade_check(d):
+    return sh(d, sys.executable, LINT, "upgrade-check")
+d = mkrepo("upgradeclean")
+code, out = _upgrade_check(d)
+check("upgrade-check: the skill's own lint copy is safe to upgrade", code == 0 and "safe to upgrade" in out, out)
+with open(os.path.join(d, ".okf", "lint.py"), "a") as f:
+    f.write("\n# local fix\n")
+code, out = _upgrade_check(d)
+check("upgrade-check flags a lint.py that matches no published release", code == 1 and "matches no published" in out, out)
+d = mkrepo("upgradecustom")
+custom_settings = {"hooks": {"PostToolUse": [{"matcher": "Edit|Write|Bash", "hooks": [{"type": "command",
+                   "command": "okf_script=\"$(git rev-parse --show-toplevel)/.okf/lint.py\"; python3 \"$okf_script\" session-track"}]}]}}
+w(d, ".claude/settings.json", json.dumps(custom_settings))
+code, out = _upgrade_check(d)
+check("upgrade-check lists a custom hook that calls .okf/ code", code == 1 and "custom hook" in out and "session-track" in out, out)
+shutil.copy(os.path.join(TPL, "hooks-settings.json"), os.path.join(d, ".okf", "frag.json"))
+code, out = lint(d, "install-hooks", ".okf/frag.json")
+s_after = json.load(open(os.path.join(d, ".claude/settings.json")))
+check("install-hooks refuses to merge beside a custom .okf/ hook (no duplicate hooks)", code == 1 and len(s_after["hooks"]["PostToolUse"]) == 1, out)
+code, out = lint(d, "install-hooks", ".okf/frag.json", "--replace-custom")
+s_after = json.load(open(os.path.join(d, ".claude/settings.json")))
+check("...and replaces it only with --replace-custom", code == 0 and len(s_after["hooks"]["PostToolUse"]) == 1
+      and "session-track" not in json.dumps(s_after), out)
+
+stock123 = {"hooks": {
+    "SessionStart": [{"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command":
+        "test -f wiki/index.md && printf '%s\\n' 'OKF knowledge base active: read wiki/index.md first; follow relative links. Persist durable findings to wiki/ as you work (single writer; subagents read-only). Obligations: AGENTS.md -> ## Knowledge base.' || true"}]}],
+    "PostToolUse": [{"matcher": "Edit|MultiEdit|Write", "hooks": [{"type": "command", "command":
+        "if [ -f .okf/lint.py ]; then if command -v uv >/dev/null 2>&1; then uv run --no-project python3 .okf/lint.py hook; else python3 .okf/lint.py hook; fi; fi"}]}],
+    "Stop": [{"hooks": [{"type": "command", "command":
+        "if [ -f .okf/lint.py ]; then if command -v uv >/dev/null 2>&1; then uv run --no-project python3 .okf/lint.py stop-gate; else python3 .okf/lint.py stop-gate; fi; fi"}]}]}}
+d = mkrepo("upgradestock")
+w(d, ".claude/settings.json", json.dumps(stock123))
+code, out = _upgrade_check(d)
+check("upgrade-check treats the published 1.2.3 hook commands as stock", code == 0 and "custom hook" not in out, out)
+custom_ptr = json.loads(json.dumps(stock123))
+custom_ptr["hooks"]["SessionStart"][0]["hooks"][0]["command"] = custom_ptr["hooks"]["SessionStart"][0]["hooks"][0]["command"].replace(
+    "Obligations: AGENTS.md -> ## Knowledge base.", "For every substantive turn, run the capture skill.")
+w(d, ".claude/settings.json", json.dumps(custom_ptr))
+code, out = _upgrade_check(d)
+check("...and flags a hand-edited pointer text, which a merge would otherwise replace silently", code == 1 and "SessionStart" in out, out)
+
+# ── 176. cited evidence: page-relative, linked and bulleted citations of untracked files are caught
+d = mkrepo("citespell")
+w(d, "docs/adr-1.md", "decision\n")
+for label, src in [("page-relative", "[S1] Local: ../../docs/adr-1.md"), ("markdown link", "[S1] Local: [adr](../../docs/adr-1.md)"),
+                   ("bullet", "- [S1] docs/adr-1.md (decision record)")]:
+    w(d, "wiki/concepts/good.md", "---\ntype: reference\ntitle: Frobnicator retry contract\ndescription: Exponential backoff and 429 handling rules for the frobnicator client.\n---\n# Frob\nRetries with exponential backoff on 429, capped at five attempts, per the client spec [S1].\n## Sources\n%s\n" % src)
+    code, out = lint(d, "lint")
+    check("untracked evidence cited %s is a lint error" % label, code == 1 and "docs/adr-1.md" in out and "untracked" in out, "code=%s %s" % (code, out[-300:]))
+sh(d, "git", "add", "docs/adr-1.md")
+code, out = lint(d, "lint")
+check("...and passes once the evidence is tracked", "cites local evidence" not in out, out[-300:])
+
+# ── 177. durability: wiki edits left uncommitted for days are flagged by lint and at session start
+d = mkrepo("aged")
+p = os.path.join(d, "wiki/concepts/good.md")
+w(d, "wiki/concepts/good.md", open(p).read() + "\nAn edit nobody committed.\n")
+old = _t.time() - 10 * 86400
+os.utime(p, (old, old))
+code, out = lint(d, "lint")
+check("lint warns about wiki edits uncommitted for more than 3 days", "uncommitted for more than 3 days" in out and "good.md" in out, out[-300:])
+code, out = lint(d, "session-start", stdin=_sess("S"))
+check("session-start tells the agent about them", "uncommitted for more than 3 days" in out, out)
+
+# ── 178. smaller lint fixes
+d = mkrepo("unplanned")
+w(d, "wiki/concepts/index.md", "# concepts\n## Pages\n* [Good](good.md) — the frobnicator retry contract rules.\n* [Outage](outage.md) — Unplanned outage runbook.\n")
+code, out = lint(d, "lint")
+check("'Unplanned' does not downgrade a dead index entry ('planned' is matched as a word)", code == 1 and "outage.md" in out, "code=%s %s" % (code, out[-200:]))
+d = mkrepo("multiline")
+w(d, "wiki/concepts/good.md", "---\ntype: reference\ntitle: Frobnicator retry contract\ndescription: Exponential backoff and 429 handling\n  rules for the frobnicator client.\n---\n# Frob\nRetries with exponential backoff on 429, capped at five attempts, per the client spec [S1].\n## Sources\n[S1] Local: src/frob.py\n")
+code, out = lint(d, "lint")
+check("a description continued on an indented line is a lint error, not a silent truncation", code == 1 and "continues on an indented next line" in out, out[-200:])
+d = mkrepo("claudetext")
+w(d, "CLAUDE.md", "AGENTS.md")
+code, out = lint(d, "lint")
+check("a CLAUDE.md holding only the text 'AGENTS.md' (broken symlink checkout) is flagged", "imports nothing" in out, out[-200:])
+d = mkrepo("tablesample")
+w(d, "wiki/concepts/limits.md", "---\ntype: reference\ntitle: Limits\ndescription: Retry and rate limits of the frobnicator client in one table.\n---\n# Limits\n\n"
+  "| Limit | Value |\n|---|---|\n| max retry attempts per request | 5 |\n| base delay in milliseconds before retrying | 250 |\n")
+code, out = lint(d, "claims", "--n", "50", "--seed", "1")
+texts = [c["text"] for c in json.loads(out)["claims"]]
+check("claims samples table rows, labelled with their headers", any("Limit: max retry attempts per request; Value: 5" == t for t in texts), str(texts))
+c1, o1 = lint(d, "claims", "--n", "3", "--seed", "audit-2026-11")
+c2, o2 = lint(d, "claims", "--n", "3", "--seed", "audit-2026-11")
+check("a text --seed is accepted and deterministic", c1 == 0 and o1 == o2 and json.loads(o1)["seed"] != date.today().toordinal(), o1[:120])
+
+# ── 179. contract v4: refresh from a stock v3 block
+d = mkrepo("refreshv3")
+mod = {}
+exec(compile("OLD_CONTRACTS = " + re.search(r"^OLD_CONTRACTS = (\(.*?\))\nCONTRACT_RE", open(LINT).read(), re.S | re.M).group(1), "c", "exec"), mod)
+v3_text = mod["OLD_CONTRACTS"][2].replace("{WIKI}", "wiki")
+w(d, "AGENTS.md", "# Repo\n\n" + v3_text); _commit(d, "v3 contract")
+code, out = lint(d, "refresh-contract", "--template", TEMPLATE)
+a = open(os.path.join(d, "AGENTS.md")).read()
+check("refresh-contract upgrades a stock v3 block to v4 with nothing kept", code == 0 and "okf:contract v4" in a and "The code wins" in a
+      and "Repo-specific rules kept" not in a, out)
 
 print("\n=== %d passed, %d failed ===" % (len(PASS), len(FAIL)))
 sys.exit(1 if FAIL else 0)

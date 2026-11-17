@@ -18,11 +18,17 @@ work from any subdirectory):
                      when wiki content is unchanged (churn guard) UNLESS
                      --mark-reviewed, which advances gitHead after a reviewed
                      no-doc-impact pass.
-  stop-gate          Claude Code Stop command-hook: blocks (exit 2, reason on
-                     stderr) when uncommitted changes touch code but no wiki page
-                     or log entry was touched. Honors stop_hook_active.
-  session-start      SessionStart hook: prints the pointer, records the session base HEAD.
-  post-commit        Git post-commit: advances the anchor when the commit touched the wiki.
+  stop-gate          Stop hook (Claude Code and Codex): when code changed this session with no
+                     wiki page or log entry, ADVISES by default (exit 0, JSON systemMessage
+                     shown to the user); with "stopGate": "block" in config it blocks (exit 2,
+                     reason on stderr); "off" disables it. Honors stop_hook_active.
+  session-start      SessionStart hook: prints the pointer, records this session's base HEAD,
+                     pre-existing dirt and no-impact lines (keyed by session_id).
+  post-commit        Git post-commit: advances the anchor when the commit touched the wiki AND
+                     every commit since the anchor is certified (never past unreviewed code).
+  upgrade-check      Run with the SKILL's copy from a repo root before upgrading .okf/: reports
+                     whether the repo's lint, runner and githooks are stock releases or carry
+                     local changes, and lists custom hook entries that reference .okf/.
   post-rewrite       Git post-rewrite: follows the anchor through amend/rebase.
   install-hooks      Merge the hook fragment into .claude/settings.json or --target codex.
   refresh-contract [--template PATH]
@@ -42,22 +48,47 @@ work from any subdirectory):
 Config: .okf/config.json  {"wikiDir": "wiki", "typeVocab": [...]}
 State:  .okf/last-update.json
 """
+import fnmatch
 import hashlib
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 from datetime import date, datetime, timezone
 
-OKF_LINT_VERSION = "1.4.2"
-CONTRACT_VERSION = 3          # templates/agents-contract.md marker; older blocks in AGENTS.md are refreshed by /okf
+OKF_LINT_VERSION = "1.5.0"
+CONTRACT_VERSION = 4          # templates/agents-contract.md marker; older blocks in AGENTS.md are refreshed by /okf
 OKF_DIR = ".okf"
 CONFIG_PATH = os.path.join(OKF_DIR, "config.json")
 STATE_PATH = os.path.join(OKF_DIR, "last-update.json")
-SESSION_HEAD_PATH = os.path.join(OKF_DIR, "session-head")   # per-clone, gitignored: HEAD when this session started
-HOOK_SEEN_PATH = os.path.join(OKF_DIR, "hook-seen.json")      # per-clone, gitignored: wiki file states the hook already processed
-SESSION_DIRTY_PATH = os.path.join(OKF_DIR, "session-dirty.json")  # per-clone, gitignored: uncommitted paths that predate the session
+# Per-session state (gitignored): one JSON file per hook session_id — base HEAD, uncommitted paths that predate the
+# session, wiki file states the hook already processed, and the no-impact lines already in log.md. Before 1.5.0 these
+# were per-clone singletons, so a second session starting in the same clone erased the first one's gate (2026-11 review).
+SESSIONS_DIR = os.path.join(OKF_DIR, "sessions")
+SESSION_TTL_DAYS = 14
+UNCOMMITTED_WARN_DAYS = 3     # wiki/evidence edits uncommitted longer than this are flagged (2026-11 fleet: 1-4 months)
+# sha256 of every published scripts/okf_lint.py, so `upgrade-check` can tell a stock copy from a locally patched one
+# (2026-11 review: a routine upgrade would have overwritten a live repo's unpublished gate fix)
+KNOWN_LINT_RELEASES = {
+    "6f893956e26c858b0de0d1df083675d1f81c8439bee98454b4545928a3ff24b1": "1.2.0",
+    "8d9f75b0d00f2f6cc1fc1759642e1abe8348fcb866adf84245b8b77324cbfbc0": "1.2.2",
+    "b6c62316c8733ce2d7a0c5c94eebce0455dcbd29775a03031f09fc03313a8768": "1.2.3",
+    "e0fbf6ada7e0744cbe996b33d70209d70d58aaa0855eb49fa1d0bda0bea37c7e": "1.3.5",
+    "9e5f31fb90cfe40b2b2aae5769e0bb519f1e416fbcd53f133dba6eec2055a529": "1.4.0",
+    "ee96ed1ad30df16d4e7904d6c285cf41173dd2cf6dd20871509909dab784bf4a": "1.4.1",
+    "9e008759df4ccec38cc88b30cb78d2286fe224afb13e7b88db2e801298df7a88": "1.4.2",
+}
+KNOWN_TEMPLATE_HASHES = {   # earlier published runner/githook templates (the current ones are hashed from templates/)
+    "okf-py.sh": {"ae938bf1dfed71378804996aff59df677def990bf58b0ca6de624640c3d7fc7d"},
+    "pre-commit": {"2f723f203cba2699b399644e9ca4097bd3a157000301019d8070200c6bb4b6e4",
+                   "882d8b3255d36db95bf521f0966ffefc2785b71fbd9bdf6f2e707d7fda6694ae",
+                   "89296bf3612ab95f09fdc945c77edbdc3992df082eac3f056c7b56f3d30f0501",
+                   "29b308449c033d7cf07343be99cfdf8e33ec8c26c6653e53aa2cd3e0a2066776"},
+    "post-commit": {"3779508f3dec69f39c8d9833c873e8d96834dd8a1028af4d3ce7e0a15a381318"},
+    "post-rewrite": {"7074cee5069522213702af152c8977cb40cdd9a9b82eda6e8b65c6caa866a2c5"},
+}
 WIKIDIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 V02_STATUS = ("draft", "stable", "deprecated")
 LEGACY_STATUS = ("verified", "unverified", "draft")
@@ -70,6 +101,19 @@ RAW_DIRS = ("raw",)
 WIKI_CANDIDATES = ["wiki", "docs/llm-wiki", "docs/wiki", "llm-wiki", "openwiki"]
 # paths whose change should NOT demand a wiki update (agent plumbing, not knowledge)
 NON_KNOWLEDGE = ("AGENTS.md", "CLAUDE.md", "DECISIONS.md", ".gitignore", ".claude/", ".codex/", OKF_DIR + "/")  # agent plumbing, never knowledge
+# config "ignorePaths": repo-specific paths or globs that never demand a wiki update (lockfiles, generated output);
+# without it every path outside the wiki counted as code and agents fell back on reflexive no-impact lines
+EXTRA_IGNORE = []
+
+def apply_config(cfg):
+    EXTRA_IGNORE[:] = [str(p).replace("\\", "/") for p in (cfg.get("ignorePaths") or []) if isinstance(p, str) and p]
+    return cfg
+
+def _ignored_extra(p):
+    for pat in EXTRA_IGNORE:
+        if fnmatch.fnmatch(p, pat) or p == pat.rstrip("/") or (pat.endswith("/") and p.startswith(pat)):
+            return True
+    return False
 
 def git(*args, strip=True):
     # quotepath=false: report non-ASCII paths as real UTF-8, not octal escapes
@@ -98,9 +142,10 @@ def chdir_repo_root():
 def load_config():
     try:
         with open(CONFIG_PATH, encoding="utf-8-sig") as f:
-            return json.load(f)
+            cfg = json.load(f)
     except (OSError, ValueError):
-        return {}
+        cfg = {}
+    return apply_config(cfg if isinstance(cfg, dict) else {})
 
 def find_wiki_dir(cfg):
     d = cfg.get("wikiDir")
@@ -160,6 +205,10 @@ def parse_frontmatter(text):
             # indented continuation = a nested OKF v0.2 family (sources:, verified:, generated:)
             if last_key and line[:1] in (" ", "\t", "-") and line.strip() and fm.get(last_key, "") == "":
                 fm[last_key] = "<nested>"
+            elif last_key and line[:1] in (" ", "\t") and line.strip() and fm.get(last_key) not in ("", "<nested>"):
+                # a plain scalar continued on the next line: YAML would join it, this parser would silently truncate it
+                if last_key not in fm.setdefault("__multiline__", []):
+                    fm["__multiline__"].append(last_key)
             continue
         key, val = m.group(1), m.group(2).strip()
         if val[:1] in ('"', "'"):
@@ -206,7 +255,7 @@ def index_links(text):
     """(planned, link) for markdown links in an index file; a line that says 'planned' marks its entries as planned."""
     for line in strip_code(text).splitlines():
         for link in re.findall(r"\[[^\]]*\]\(\s*([^)\s]+)(?:\s+\"[^\"]*\")?\s*\)", line):
-            yield "planned" in line.lower(), link
+            yield bool(re.search(r"\bplanned\b", line, re.I)), link   # a word, so "Unplanned outage" does not count
 
 
 def missing_index_targets(index_rel, text, exists):
@@ -341,6 +390,9 @@ def lint_page(text, rel, vocab):
         for k in fm.get("__folded__", []):
             if k in ("type", "title", "description"):
                 errors.append("%s: '%s' uses a multi-line scalar (>/|) — unsupported; write a single-line value" % (rel, k))
+        for k in fm.get("__multiline__", []):
+            if k in ("type", "title", "description"):
+                errors.append("%s: '%s' continues on an indented next line — write a single-line value" % (rel, k))
         for req in ("type", "title", "description"):
             v = fm.get(req, "")
             if not v:
@@ -416,9 +468,78 @@ def git_guard_errors(root, wiki):
             names = ", ".join(unquote_git_path(l[3:]) for l in untracked[:5])
             warnings.append("wiki has %d untracked path(s) (git '??'): %s%s — commit them or they will not survive `git clean`"
                             % (len(untracked), names, " …" if len(untracked) > 5 else ""))
+    aged = aged_uncommitted(wiki)
+    if aged:
+        oldest = max(aged, key=lambda x: x[1])
+        warnings.append("%d wiki path(s) uncommitted for more than %d days (oldest: %s, %d days) — commit them: an uncommitted "
+                        "page or capture is not durable (2026-11 fleet review: pages sat uncommitted for 1-4 months)"
+                        % (len(aged), UNCOMMITTED_WARN_DAYS, oldest[0], oldest[1]))
     return errors, warnings
 
+
+def aged_uncommitted(path, days=UNCOMMITTED_WARN_DAYS):
+    """[(repo-relative path, age in days)] for uncommitted (modified or untracked) files under path older than `days`."""
+    code, out = git("status", "--porcelain", "--untracked-files=all", "--", path, strip=False)
+    if code != 0:
+        return []
+    now, res = time.time(), []
+    for p in porcelain_paths(out):
+        b = os.path.basename(p)
+        if b in (".DS_Store", "Thumbs.db", "desktop.ini") or b.endswith(".pyc"):
+            continue
+        try:
+            age = (now - os.stat(p).st_mtime) / 86400.0
+        except OSError:
+            continue
+        if age > days:
+            res.append((p, int(age)))
+    return res
+
 # ---------------------------------------------------------------- lint
+
+SOURCE_LINE_RE = re.compile(r"^\s*(?:[-*+]\s+)?\[\^?S?[\w.-]+\]:?\s+(.*)$")
+
+
+def cited_local_paths(wiki, rel, text):
+    """Repo-relative paths of existing local FILES a leaf page cites as evidence. Accepts `[S1] Local: path`,
+    `[S1] path`, bulleted and footnote forms, markdown links on those lines or anywhere under a Sources heading, and
+    `source:`/`resource:` frontmatter; each is resolved against the repo root and against the page's directory.
+    Before 1.5.0 only `[S#] Local: <repo-root path>` was seen, so page-relative or linked citations of untracked files
+    passed silently (2026-11 review). Wiki pages outside raw/ are knowledge, not evidence, and are skipped."""
+    fm = parse_frontmatter(text) or {}
+    raw = []
+    for k in ("source", "resource"):
+        v = fm.get(k) or ""
+        if isinstance(v, str) and v and v != "<nested>" and not re.match(r"^[a-z]+://", v) and "<" not in v:
+            raw.append(v)
+    in_sources = False
+    for line in strip_code(frontmatter_body_split(text)).splitlines():
+        h = re.match(r"^#{1,6}\s+(.*)", line)
+        if h:
+            in_sources = h.group(1).strip().lower().startswith("sources")
+            continue
+        m = SOURCE_LINE_RE.match(line)
+        if m or in_sources:
+            raw += re.findall(r"\]\(\s*([^)\s#]+)", line)
+        if m:
+            rest = re.sub(r"^Local:\s*", "", m.group(1).strip(), flags=re.I).split()
+            if rest and not rest[0].startswith("["):
+                raw.append(rest[0])
+    wiki_prefix = wiki.rstrip("/") + "/"
+    out = []
+    for c in raw:
+        c = c.strip().strip("`").rstrip(".,;)")
+        if not c or re.match(r"^[a-z]+://", c) or c.startswith(("~", "/", "#")) or "<" in c:
+            continue
+        for cand in (os.path.normpath(c), os.path.normpath(os.path.join(wiki, os.path.dirname(rel), c))):
+            if cand.startswith("..") or not os.path.isfile(cand):
+                continue
+            cand = cand.replace(os.sep, "/")
+            if not (cand.startswith(wiki_prefix) and not any(cand.startswith(wiki_prefix + r + "/") for r in RAW_DIRS)):
+                out.append(cand)
+            break
+    return list(dict.fromkeys(out))
+
 
 def run_lint(quiet=False):
     root = chdir_repo_root()
@@ -490,16 +611,8 @@ def run_lint(quiet=False):
     for rel, (text, is_leaf) in pages.items():
         if not is_leaf:
             continue
-        fm = parse_frontmatter(text) or {}
-        cands = re.findall(r"^\[S\d+\]\s+Local:\s*([^\s]+)", text, re.M)
-        for k in ("source", "resource"):
-            v = fm.get(k) or ""
-            if v and not re.match(r"^[a-z]+://", v) and "<" not in v:
-                cands.append(v)
-        for c in cands:
-            c = c.strip().rstrip(".,;)")
-            if c and not c.startswith("http") and os.path.exists(c):
-                cited.setdefault(c, rel)
+        for c in cited_local_paths(wiki, rel, text):
+            cited.setdefault(c, rel)
     for path, rel in sorted(cited.items()):
         if os.path.isdir(path):
             continue
@@ -546,6 +659,12 @@ def run_lint(quiet=False):
                             % (m.group(1), CONTRACT_VERSION))
     except OSError:
         pass
+    try:
+        if os.path.isfile("CLAUDE.md") and not os.path.islink("CLAUDE.md") and read_text("CLAUDE.md").strip() == "AGENTS.md":
+            warnings.append("CLAUDE.md is a regular file containing only 'AGENTS.md' (a symlink checked out without symlink "
+                            "support) — it imports nothing; replace its content with the one-line import '@AGENTS.md'")
+    except OSError:
+        pass
 
     for e in errors:
         print("ERROR   " + e)
@@ -560,19 +679,20 @@ def run_lint(quiet=False):
 
 def _is_code(p, wiki):
     """A path whose change may demand a wiki update: outside the wiki and not agent plumbing."""
-    return not p.startswith(wiki + "/") and not any(p == n.rstrip("/") or p.startswith(n) for n in NON_KNOWLEDGE)
+    return (not p.startswith(wiki + "/") and not any(p == n.rstrip("/") or p.startswith(n) for n in NON_KNOWLEDGE)
+            and not _ignored_extra(p))
 
 def _touches_wiki(paths, wiki):
     """Any wiki path that is knowledge (raw/ captures are evidence and never satisfy a gate)."""
     return any(p.startswith(wiki + "/") and not any(p.startswith(wiki + "/" + r + "/") for r in RAW_DIRS) for p in paths)
 
-def _commits_since(last):
-    """[[sha, subject, certified_by_marker, [paths]]] for last..HEAD in one git call.
-    A commit is certified when it touches the wiki, carries [no-impact] in its subject,
-    or an `Okf-Impact: none` trailer."""
+def _commits_since(last, extra=()):
+    """[[sha, subject, certified_by_marker, [paths]]] for last..HEAD in one git call (`extra` adds rev-list
+    arguments, e.g. ("--not", "--remotes") to drop commits pulled from a remote). A commit is certified when it
+    touches the wiki, carries [no-impact] in its subject, or an `Okf-Impact: none` trailer. None on git failure."""
     code, out = git("log", "--name-only",
                     "--pretty=format:@@%H%x1f%s%x1f%(trailers:key=Okf-Impact,valueonly)",
-                    "%s..HEAD" % last, strip=False)
+                    "%s..HEAD" % last, *extra, strip=False)
     if code != 0:
         return None
     commits, cur = [], None
@@ -588,22 +708,30 @@ def _commits_since(last):
             cur[3].append(line.strip())
     return commits
 
-def _no_impact_today(wiki):
-    """A no-impact entry dated today (local or UTC) in the working-tree log.md, in either the
-    legacy `## [date] no-impact | why` form or the v0.2 `## date` + bulleted form."""
+def _no_impact_lines_today(wiki):
+    """Set of no-impact entries dated today (local or UTC) in the working-tree log.md, in either the legacy
+    `## [date] no-impact | why` form or the v0.2 `## date` + bulleted form. A bullet counts only inside its own
+    dated section (before 1.5.0 a 600-character window reached into older entries below today's heading)."""
     try:
         text = read_text(os.path.join(wiki, "log.md"))
     except OSError:
-        return False
+        return set()
     days = {date.today().isoformat(), datetime.now(timezone.utc).date().isoformat()}
-    for m in re.finditer(r"^## \[?(\d{4}-\d{2}-\d{2})\]?[^\n]*$", text, re.M):
+    heads = list(re.finditer(r"^## \[?(\d{4}-\d{2}-\d{2})\]?[^\n]*$", text, re.M))
+    found = set()
+    for i, m in enumerate(heads):
         if m.group(1) not in days:
             continue
         if "no-impact" in m.group(0).lower():
-            return True
-        if re.search(r"^\s*[-*].*no-impact", text[m.end():m.end() + 600], re.M | re.I):
-            return True
-    return False
+            found.add(m.group(0).strip())
+            continue
+        section_end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+        for b in re.findall(r"^\s*[-*].*no-impact.*$", text[m.end():section_end], re.M | re.I):
+            found.add(m.group(0).strip() + " :: " + b.strip())
+    return found
+
+def _no_impact_today(wiki):
+    return bool(_no_impact_lines_today(wiki))
 
 def _git_path(rel):
     code, out = git("rev-parse", "--git-path", rel)
@@ -685,36 +813,65 @@ def _wiki_file_states(wiki):
     return states
 
 
-def _load_seen():
+def session_id(payload):
+    """The hook payload's session_id (Claude Code and Codex both send one; Codex subagents carry the parent's), made
+    filename-safe; "default" when absent, which keeps the pre-1.5.0 one-session-per-clone behaviour."""
+    sid = payload.get("session_id") if isinstance(payload, dict) else None
+    sid = re.sub(r"[^A-Za-z0-9._-]", "_", str(sid))[:128] if sid else ""
+    return sid or "default"
+
+
+def _session_path(sid):
+    return os.path.join(SESSIONS_DIR, sid + ".json")
+
+
+def load_session(sid):
     try:
-        with open(HOOK_SEEN_PATH, encoding="utf-8") as f:
+        with open(_session_path(sid), encoding="utf-8") as f:
             d = json.load(f)
             return d if isinstance(d, dict) else {}
     except (OSError, ValueError):
         return {}
 
 
-def _save_seen(states):
+def save_session(sid, data):
+    """Atomic write (temp file + os.replace): a concurrent reader never sees a truncated file (before 1.5.0 a
+    truncated hook-seen.json made the hook nudge about every page in the wiki)."""
     try:
-        os.makedirs(OKF_DIR, exist_ok=True)
-        with open(HOOK_SEEN_PATH, "w", encoding="utf-8") as f:
-            json.dump(states, f)
+        os.makedirs(SESSIONS_DIR, exist_ok=True)
+        p = _session_path(sid)
+        tmp = "%s.tmp.%d" % (p, os.getpid())
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        os.replace(tmp, p)
     except OSError:
         pass
 
 
-def _changed_since_last_hook(wiki):
-    """Wiki files written by ANY tool since the previous hook run. Agents write pages with shell heredocs as
-    often as with Edit/Write (the eval's Sonnet 5.5 executor did so in every bootstrap and migration), and a
+def _prune_sessions():
+    cutoff = time.time() - SESSION_TTL_DAYS * 86400
+    try:
+        for f in os.listdir(SESSIONS_DIR):
+            p = os.path.join(SESSIONS_DIR, f)
+            if os.path.isfile(p) and os.path.getmtime(p) < cutoff:
+                os.remove(p)
+    except OSError:
+        pass
+
+
+def _changed_since_last_hook(wiki, sid):
+    """Wiki files written by ANY tool since this session's previous hook run. Agents write pages with shell heredocs
+    as often as with Edit/Write (the eval's Sonnet 5.5 executor did so in every bootstrap and migration), and a
     hook keyed on file_path alone never saw those writes."""
     now = _wiki_file_states(wiki)
-    if not os.path.isfile(HOOK_SEEN_PATH):
-        # no baseline yet (hooks installed mid-session, or SessionStart did not run): record one silently —
+    sess = load_session(sid)
+    seen = sess.get("seen")
+    sess["seen"] = now
+    save_session(sid, sess)
+    if not isinstance(seen, dict):
+        # no baseline yet (hooks installed mid-session, or SessionStart did not run): recorded silently above —
         # treating every existing page as "just written" would auto-log and nudge the whole wiki at once
-        _save_seen(now)
         return []
-    seen = _load_seen()
-    _save_seen(now)
     return [p for p, sig in sorted(now.items()) if seen.get(p) != sig]
 
 
@@ -732,9 +889,9 @@ def _hook_inner():
     if not wiki:
         return 0
     # tool-agnostic: whatever wrote to the wiki (Edit, Write, apply_patch, a shell heredoc, a script),
-    # process every wiki file whose state changed since the last hook run, plus any explicitly named path
+    # process every wiki file whose state changed since this session's last hook run, plus any explicitly named path
     root = os.getcwd()
-    paths = sorted(set(paths) | {os.path.join(root, p) for p in _changed_since_last_hook(wiki)})
+    paths = sorted(set(paths) | {os.path.join(root, p) for p in _changed_since_last_hook(wiki, session_id(payload))})
     if not paths:
         return 0
     notes = []
@@ -949,19 +1106,34 @@ def run_state_update(mark_reviewed=False, auto=False, from_last_wiki=False):
     return 0
 
 def run_post_commit():
-    """Git post-commit: when the commit just made touched the wiki (not raw/), advance the per-clone
-    anchor to it — the review anchor then follows normal work with no manual step."""
+    """Git post-commit: when the commit just made touched the wiki (not raw/) AND every commit since the anchor is
+    certified, advance the per-clone anchor to it — the review anchor then follows normal work with no manual step.
+    1.3.0–1.4.3 advanced on any wiki-touching commit, so one log line silently certified every earlier code-only
+    commit: noop-check said CURRENT while the wiki was stale (reproduced three times in the 2026-11 review). Now an
+    uncertified commit keeps the anchor where it is, and noop-check keeps listing it until it is reviewed."""
     root = chdir_repo_root()
     cfg = load_config()
     wiki = find_wiki_dir(cfg)
     if not root or not wiki or cfg.get("profile") == "lite":
         return 0
-    code, out = git("diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD", strip=False)
+    # --root: the bootstrap commit is often the repository's first commit, which plain diff-tree reports as empty
+    code, out = git("diff-tree", "--root", "--no-commit-id", "--name-only", "-r", "HEAD", strip=False)
     if code != 0:
         return 0
-    if _touches_wiki([l.strip() for l in out.splitlines() if l.strip()], wiki):
-        return run_state_update(auto=True)
-    return 0
+    if not _touches_wiki([l.strip() for l in out.splitlines() if l.strip()], wiki):
+        return 0
+    last = load_state().get("gitHead")
+    if last and re.fullmatch(r"[0-9a-f]{40}", last) and git("cat-file", "-e", last + "^{commit}")[0] == 0:
+        commits = _commits_since(last)
+        if commits is None:
+            return 0
+        uncertified = [sha for sha, _subj, marker, paths in commits
+                       if any(_is_code(p, wiki) for p in paths) and not marker and not _touches_wiki(paths, wiki)]
+        if uncertified:
+            print("okf: review anchor kept at %s — %d commit(s) since it changed code without a wiki update or marker "
+                  "(e.g. %s); `/okf update` reviews them (noop-check lists them)." % (last[:8], len(uncertified), uncertified[-1][:8]))
+            return 0
+    return run_state_update(auto=True)
 
 def run_post_rewrite():
     """Git post-rewrite (amend/rebase): stdin carries `old new` pairs; if the recorded anchor was
@@ -1001,27 +1173,19 @@ def _path_sig(p):
         return "missing"
 
 
-def _record_session_dirty():
-    """Uncommitted paths at session start, with signatures: work that predates the session (another session's or
-    the user's) must not trip the Stop gate, and must not satisfy it either (eval: the gate fired on a user's five
-    uncommitted source files and the agent wrote a wiki note about work it never touched)."""
-    code, out = git("status", "--porcelain", strip=False)
+def _dirty_sigs():
+    """Uncommitted paths with content signatures, files listed individually (--untracked-files=all: before 1.5.0 an
+    untracked directory was signed "dir", so all later work inside it was invisible to the gate). Work that predates
+    the session (another session's or the user's) must neither trip nor satisfy the Stop gate (eval: the gate fired
+    on a user's five uncommitted source files and the agent wrote a wiki note about work it never touched)."""
+    code, out = git("status", "--porcelain", "--untracked-files=all", strip=False)
     if code != 0:
-        return
-    sig = {p: _path_sig(p) for p in porcelain_paths(out)}
-    try:
-        with open(SESSION_DIRTY_PATH, "w", encoding="utf-8") as f:
-            json.dump(sig, f)
-    except OSError:
-        pass
+        return None
+    return {p: _path_sig(p) for p in porcelain_paths(out)}
 
 
-def _changed_this_session(paths):
+def _changed_this_session(paths, pre):
     """Drop paths that were already uncommitted at session start and are unchanged since."""
-    try:
-        pre = json.load(open(SESSION_DIRTY_PATH, encoding="utf-8"))
-    except (OSError, ValueError):
-        return paths
     if not isinstance(pre, dict):
         return paths
     return [p for p in paths if p not in pre or _path_sig(p) != pre[p]]
@@ -1045,18 +1209,25 @@ def run_session_start():
     if not root or not wiki:
         return 0
     source = (payload.get("source") if isinstance(payload, dict) else None) or "startup"
+    sid = session_id(payload)
+    sess = load_session(sid)
     code, head = git("rev-parse", "HEAD")
-    if source != "compact" and code == 0 and re.fullmatch(r"[0-9a-f]{40}", head or ""):
-        try:
-            os.makedirs(OKF_DIR, exist_ok=True)
-            with open(SESSION_HEAD_PATH, "w", encoding="utf-8") as f:
-                f.write(head + "\n")
-        except OSError:
-            pass
-        _record_session_dirty()
-    _save_seen(_wiki_file_states(wiki))
+    # a compaction or resume continues the same session: keep its base, or its own earlier commits stop counting
+    keep = source in ("compact", "resume") and re.fullmatch(r"[0-9a-f]{40}", str(sess.get("head") or ""))
+    if not keep and code == 0 and re.fullmatch(r"[0-9a-f]{40}", head or ""):
+        sess = {"head": head, "dirty": _dirty_sigs() or {}, "noimpact": sorted(_no_impact_lines_today(wiki)),
+                "started": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    sess["seen"] = _wiki_file_states(wiki)
+    save_session(sid, sess)
+    _prune_sessions()
     print("OKF knowledge base active: read %s/index.md first; follow relative links. Persist durable findings to %s/ as you work "
           "(single writer; subagents read-only). Obligations: AGENTS.md -> ## Knowledge base." % (wiki, wiki))
+    aged = aged_uncommitted(wiki)
+    if aged:
+        oldest = max(aged, key=lambda x: x[1])
+        print("okf: %d wiki path(s) have been uncommitted for more than %d days (oldest: %s, %d days). Uncommitted pages are "
+              "not durable: commit the ones this work owns, and tell the user about the rest (never commit someone else's "
+              "work in progress)." % (len(aged), UNCOMMITTED_WARN_DAYS, oldest[0], oldest[1]))
     if cfg.get("profile") != "lite":
         hp_code, hp = git("config", "core.hooksPath")
         pc = _git_path("hooks/pre-commit")
@@ -1094,11 +1265,14 @@ def run_session_start():
 # ---------------------------------------------------------------- stop-gate / pre-commit
 
 def run_stop_gate():
-    """Stop hook (Claude Code and Codex): exit 2 + stderr reason blocks; exit 0 + '{}' allows (Codex
-    requires JSON stdout on allow). Checks BOTH the uncommitted worktree AND the commits made since
-    this session started (.okf/session-head from the SessionStart hook), so committing code no
-    longer bypasses the gate. Escapes: a wiki page or log entry touched this session, a no-impact
-    log line dated today, or an `Okf-Impact: none` commit trailer. raw/ captures never count."""
+    """Stop hook (Claude Code and Codex). Looks at the uncommitted worktree AND the commits this session made (base
+    HEAD from SessionStart, keyed by session_id; commits already on a remote — pulls, merges — are not the session's).
+    Satisfied by a wiki page or log entry touched this session, a no-impact line ADDED this session and dated today, or
+    an `Okf-Impact: none` trailer; raw/ captures never count. On a miss it ADVISES by default — exit 0 with a JSON
+    systemMessage that both runtimes show the user — because the 2026-11 fleet review found the blocking gate's only
+    measured effects were friction (placeholder no-impact lines, an unsatisfiable gate on a shared worktree) while
+    agents kept the wiki up without it. Config "stopGate": "block" restores exit 2 (reason on stderr); "off" disables.
+    Allow always prints '{}' (Codex requires JSON stdout on exit 0)."""
     try:
         payload = json.load(sys.stdin)
     except ValueError:
@@ -1109,42 +1283,51 @@ def run_stop_gate():
     root = chdir_repo_root()
     cfg = load_config()
     wiki = find_wiki_dir(cfg)
-    if not root or not wiki or cfg.get("profile") == "lite":
+    mode = str(cfg.get("stopGate") or "advise").lower()
+    if not root or not wiki or cfg.get("profile") == "lite" or mode == "off":
         print("{}")
         return 0
-    code, out = git("status", "--porcelain", strip=False)
+    block = mode == "block"
+
+    def miss(msg):
+        if block:
+            sys.stderr.write("okf stop-gate: " + msg + "\n")
+            return 2
+        print(json.dumps({"systemMessage": "okf: " + msg}))
+        return 0
+
+    sess = load_session(session_id(payload))
+    code, out = git("status", "--porcelain", "--untracked-files=all", strip=False)
     if code == 124:
-        sys.stderr.write("okf stop-gate: git timed out while checking the worktree — retry (the gate fails closed by design).\n")
-        return 2
+        return miss("git timed out while checking the worktree — retry (the gate fails closed by design).")
     if code != 0:
         print("{}")
         return 0
-    paths = _changed_this_session(porcelain_paths(out))
+    paths = _changed_this_session(porcelain_paths(out), sess.get("dirty"))
     wiki_touched = _touches_wiki(paths, wiki)
     code_changed = [p for p in paths if _is_code(p, wiki)]
-    base = None
-    try:
-        base = read_text(SESSION_HEAD_PATH).strip()
-    except OSError:
-        pass
+    base = str(sess.get("head") or "")
     hcode, head = git("rev-parse", "HEAD")
     committed_code, committed_wiki, marker = [], False, False
-    if base and re.fullmatch(r"[0-9a-f]{40}", base) and hcode == 0 and base != head:
+    if re.fullmatch(r"[0-9a-f]{40}", base) and hcode == 0 and base != head:
         c2, _ = git("cat-file", "-e", base + "^{commit}")
-        for sha, subj, mk, cpaths in ((_commits_since(base) if c2 == 0 else None) or []):
+        commits = _commits_since(base, ("--not", "--remotes")) if c2 == 0 else None
+        if commits is None and c2 in (0, 124):
+            return miss("could not list this session's commits (git failed or timed out) — retry (the gate fails closed by design).")
+        for sha, subj, mk, cpaths in (commits or []):
             if _touches_wiki(cpaths, wiki):
                 committed_wiki = True
             if mk:
                 marker = True
             committed_code += [p for p in cpaths if _is_code(p, wiki)]
-    if (code_changed or committed_code) and not (wiki_touched or committed_wiki or marker or _no_impact_today(wiki)):
+    new_no_impact = _no_impact_lines_today(wiki) - set(sess.get("noimpact") or [])
+    if (code_changed or committed_code) and not (wiki_touched or committed_wiki or marker or new_no_impact):
         example = (code_changed or committed_code)[0]
-        sys.stderr.write(
-            "okf stop-gate: %d uncommitted and %d committed non-wiki change(s) this session (e.g. %s) but no wiki page or log entry was touched. "
+        return miss(
+            "%d uncommitted and %d committed non-wiki change(s) this session (e.g. %s) but no wiki page or log entry was touched. "
             "Update the affected %s/ page(s) and append to %s/log.md — or, if this work truly has no knowledge impact, append one line to "
-            "%s/log.md dated today: '## [%s] no-impact | <what and why>'. See AGENTS.md -> Knowledge base.\n"
+            "%s/log.md dated today: '## [%s] no-impact | <what and why>'. See AGENTS.md -> Knowledge base."
             % (len(code_changed), len(committed_code), example, wiki, wiki, wiki, date.today().isoformat()))
-        return 2
     print("{}")
     return 0
 
@@ -1251,11 +1434,57 @@ def _is_okf_entry(entry):
     return any(any(m in (h.get("command") or "") for m in OKF_HOOK_MARKERS)
                for h in (entry.get("hooks") or []) if isinstance(h, dict))
 
-def run_install_hooks(fragment_path, target="claude"):
+
+def _okf_related(cmd):
+    return ".okf/" in cmd or "okf_lint" in cmd or "OKF knowledge base active" in cmd
+
+
+def _refs_okf(entry):
+    """A hook entry whose command references the repo's .okf/ machinery or prints the okf pointer."""
+    if not isinstance(entry, dict):
+        return False
+    return any(_okf_related(h.get("command") or "") for h in (entry.get("hooks") or []) if isinstance(h, dict))
+
+
+# Every command form okf has ever published (1.1–1.2 inline, 1.3+ runner, 1.5 project-pinned runner, the 1.2 pointer).
+STOCK_HOOK_COMMANDS = (
+    re.compile(r'^f="\$\((?:cd "\$\{CLAUDE_PROJECT_DIR:-\.\}" 2>/dev/null && )?git rev-parse --show-toplevel 2>/dev/null\)'
+               r'/\.okf/okf-py\.sh"; if \[ -f "\$f" \]; then sh "\$f" (?:session-start|hook|stop-gate);\s+(?:else echo \'\{\}\'; )?fi$'),
+    re.compile(r'^if \[ -f \.okf/lint\.py \]; then (?:if command -v uv >/dev/null 2>&1; then uv run (?:--no-project )?python3 '
+               r'\.okf/lint\.py (?:hook|stop-gate); else )?python3 \.okf/lint\.py (?:hook|stop-gate);(?: fi;)? fi$'),
+    re.compile(r"^test -f [\w./-]+/index\.md && printf '%s\\n' 'OKF knowledge base active: read [\w./-]+/index\.md first; "
+               r"follow relative links\. Persist durable findings to [\w./-]+/ as you work \(single writer; subagents "
+               r"read-only\)\. Obligations: AGENTS\.md -> ## Knowledge base\.' \|\| true$"),
+)
+
+
+def custom_okf_entries(settings, also_stock=()):
+    """[(event, command)] for hook commands that call .okf/ code or print the okf pointer but match no published okf
+    form (and none in `also_stock`, the fragment being installed) — hand-written or locally patched hooks. Replacing
+    them silently loses local logic; keeping them beside new entries duplicates hooks (2026-11 review: a simulated
+    upgrade of a live repo left 3 PostToolUse hooks and 2 Stop gates, its custom pointer text would have been replaced,
+    and the old `session-track` call failed on every tool use against the re-copied lint)."""
+    out = []
+    for event, entries in ((settings or {}).get("hooks") or {}).items():
+        for e in entries if isinstance(entries, list) else []:
+            for h in (e.get("hooks") or []) if isinstance(e, dict) else []:
+                cmd = (h.get("command") or "") if isinstance(h, dict) else ""
+                if _okf_related(cmd) and cmd not in also_stock and not any(r.match(cmd.strip()) for r in STOCK_HOOK_COMMANDS):
+                    out.append((event, cmd[:160]))
+    return out
+
+
+def _fragment_commands(frag):
+    return {h.get("command") for entries in ((frag or {}).get("hooks") or {}).values() if isinstance(entries, list)
+            for e in entries if isinstance(e, dict) for h in (e.get("hooks") or []) if isinstance(h, dict)}
+
+
+def run_install_hooks(fragment_path, target="claude", replace_custom=False):
     """Deep-merge a {'hooks': {...}} fragment into .claude/settings.json (or .codex/hooks.json with
     --target codex) WITHOUT touching sibling keys. Idempotent; an older okf entry for the same event
     is REPLACED (template upgrade), foreign entries are kept; events listed in config
-    `hooksDisabled` are never (re)installed; the write is atomic and the backup lives under .okf/."""
+    `hooksDisabled` are never (re)installed; the write is atomic and the backup lives under .okf/.
+    Refuses (exit 1) while custom entries call .okf/ code, unless --replace-custom (after a human decision)."""
     root = chdir_repo_root()
     if not root:
         print("okf: not a git repository — run from the target repo")
@@ -1286,6 +1515,15 @@ def run_install_hooks(fragment_path, target="claude"):
         if not isinstance(settings, dict):
             print("okf: existing %s is not a JSON object — refusing to touch it" % spath)
             return 1
+        custom = custom_okf_entries(settings, also_stock=_fragment_commands(frag))
+        if custom and not replace_custom:
+            print("okf: %s has %d custom hook command(s) that call .okf/ code but are not okf template entries — refusing to "
+                  "merge (keeping them would duplicate hooks; replacing them may drop local logic):" % (spath, len(custom)))
+            for ev, cmd in custom:
+                print("  %s: %s" % (ev, cmd))
+            print("Show these to the user. Port any local logic upstream or into .okf/githooks/pre-commit.local, then re-run "
+                  "with --replace-custom to replace them with the template entries.")
+            return 1
         os.makedirs(OKF_DIR, exist_ok=True)
         with open(os.path.join(OKF_DIR, os.path.basename(spath) + ".bak"), "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
@@ -1306,7 +1544,7 @@ def run_install_hooks(fragment_path, target="claude"):
         for entry in entries:
             if entry in existing:
                 continue
-            olds = [e for e in existing if _is_okf_entry(e)]
+            olds = [e for e in existing if _is_okf_entry(e) or (replace_custom and _refs_okf(e))]
             for e in olds:
                 existing.remove(e)
             replaced += 1 if olds else 0
@@ -1320,6 +1558,82 @@ def run_install_hooks(fragment_path, target="claude"):
     print("okf: merged %d new hook entr%s into %s (%d upgraded, %d event(s) disabled by config) — sibling settings untouched%s"
           % (added, "y" if added == 1 else "ies", spath, replaced, skipped,
              " (backup: %s)" % os.path.join(OKF_DIR, os.path.basename(spath) + ".bak") if had_existing else ""))
+    return 0
+
+# ---------------------------------------------------------------- upgrade-check
+
+def _sha256_file(p):
+    with open(p, "rb") as f:
+        return hashlib.sha256(f.read()).hexdigest()
+
+
+def run_upgrade_check():
+    """Run the SKILL's copy from the target repo's root before re-copying .okf/ or merging hooks. Reports each
+    machinery file as stock (a published release or template: safe to re-copy) or locally changed (show it, keep
+    its logic), and every custom hook entry that calls .okf/ code. Exit 0 = safe to upgrade mechanically; 1 = a
+    human decision is needed. Read-only."""
+    root = chdir_repo_root()
+    if not root:
+        print("okf upgrade-check: not a git repository")
+        return 1
+    me = os.path.abspath(__file__)
+    tdir = os.path.join(os.path.dirname(os.path.dirname(me)), "templates")
+    oks, issues = [], []
+    lp = os.path.join(OKF_DIR, "lint.py")
+    if os.path.isfile(lp):
+        h = _sha256_file(lp)
+        vm = re.search(r'OKF_LINT_VERSION = "([0-9.]+)"', read_text(lp))
+        if h == _sha256_file(me):
+            oks.append(".okf/lint.py: identical to this skill's copy (%s)" % OKF_LINT_VERSION)
+        elif h in KNOWN_LINT_RELEASES:
+            oks.append(".okf/lint.py: stock release %s — safe to re-copy" % KNOWN_LINT_RELEASES[h])
+        else:
+            issues.append(".okf/lint.py: says %s but matches no published okf release — local changes or an unreleased "
+                          "build. Diff it against %s and keep (or upstream) its logic before re-copying."
+                          % (vm.group(1) if vm else "no version", me))
+    else:
+        oks.append(".okf/lint.py: missing (repair installs it)")
+    for name, rel in (("okf-py.sh", "okf-py.sh"), ("pre-commit", "githooks/pre-commit"),
+                      ("post-commit", "githooks/post-commit"), ("post-rewrite", "githooks/post-rewrite")):
+        p = os.path.join(OKF_DIR, rel)
+        if not os.path.isfile(p):
+            oks.append(".okf/%s: missing (repair installs it)" % rel)
+            continue
+        known = set(KNOWN_TEMPLATE_HASHES.get(name, set()))
+        if os.path.isfile(os.path.join(tdir, rel)):
+            known.add(_sha256_file(os.path.join(tdir, rel)))
+        if _sha256_file(p) in known:
+            oks.append(".okf/%s: stock template — safe to re-copy" % rel)
+        else:
+            issues.append(".okf/%s: differs from every published template — a project gate or local fix. Keep it, or move "
+                          "the gate into .okf/githooks/pre-commit.local after showing it to the user." % rel)
+    for spath in (os.path.join(".claude", "settings.json"), os.path.join(".codex", "hooks.json")):
+        if not os.path.isfile(spath):
+            continue
+        try:
+            with open(spath, encoding="utf-8-sig") as f:
+                s = json.load(f)
+        except ValueError:
+            issues.append("%s: not valid JSON — fix it before merging hooks" % spath)
+            continue
+        tmpl = {}
+        for t in ("hooks-settings.json", "hooks-codex.json"):
+            try:
+                with open(os.path.join(tdir, t), encoding="utf-8") as f:
+                    tmpl.setdefault("hooks", {}).update({k + t: v for k, v in json.load(f).get("hooks", {}).items()})
+            except (OSError, ValueError):
+                pass
+        for ev, cmd in custom_okf_entries(s if isinstance(s, dict) else {}, also_stock=_fragment_commands(tmpl)):
+            issues.append("%s %s: custom hook calls .okf/ code: %s" % (spath, ev, cmd))
+    for o in oks:
+        print("  ok      " + o)
+    for i in issues:
+        print("  REVIEW  " + i)
+    if issues:
+        print("okf upgrade-check: %d item(s) need a human decision before re-copying .okf/ or merging hooks — show them to the user."
+              % len(issues))
+        return 1
+    print("okf upgrade-check: safe to upgrade mechanically (lint, runner, githooks, hook merge).")
     return 0
 
 # ---------------------------------------------------------------- main
@@ -1368,10 +1682,11 @@ def claim_candidates(rel, text):
         end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), 0)
         start = end + 1
     units, buf, buf_line, section, fence = [], [], None, "", False
+    table_head = None
 
     def flush():
         if buf:
-            units.append((buf_line, " ".join(x.strip() for x in buf)))
+            units.append((buf_line, " ".join(x.strip() for x in buf), False))
         buf.clear()
 
     for i in range(start, len(lines)):
@@ -1385,11 +1700,26 @@ def claim_candidates(rel, text):
         h = re.match(r"^#{1,6}\s+(.*)", line)
         if h:
             flush()
+            table_head = None
             section = h.group(1).strip().lower()
             continue
-        if any(section.startswith(x) for x in SKIP_SECTIONS) or line.lstrip().startswith(("<!--", "|")):
+        if any(section.startswith(x) for x in SKIP_SECTIONS) or line.lstrip().startswith("<!--"):
             flush()
             continue
+        if line.lstrip().startswith("|"):
+            # table rows hold dense numbers and statuses — the error class the sampler targets; before 1.5.0 they
+            # were never sampled. Each data row becomes one unit, labelled with its column headers.
+            flush()
+            cells = [c.strip() for c in line.strip().strip("|").split("|")]
+            if all(re.fullmatch(r":?-{2,}:?", c) for c in cells if c):
+                continue
+            if table_head is None:
+                table_head = cells
+                continue
+            units.append((i + 1, "; ".join(("%s: %s" % (hd, c)) if hd else c
+                                            for hd, c in zip(table_head + [""] * len(cells), cells) if c), True))
+            continue
+        table_head = None
         if not line.strip():
             flush()
             continue
@@ -1401,8 +1731,8 @@ def claim_candidates(rel, text):
         buf.append(line)
     flush()
     out = []
-    for ln, para in units:
-        for sent in re.split(r"(?<=[.!?])\s+(?=[A-Z0-9`*\"(\[])", para):
+    for ln, para, is_row in units:
+        for sent in ([para] if is_row else re.split(r"(?<=[.!?])\s+(?=[A-Z0-9`*\"(\[])", para)):
             plain = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", sent)
             if len(re.findall(r"[A-Za-z0-9]+", plain)) < 6:
                 continue
@@ -1426,6 +1756,9 @@ def run_claims(args):
         return default
     n = max(1, opt("--n", 12))
     seed = opt("--seed", date.today().toordinal())
+    if "--seed" in args and args.index("--seed") + 1 < len(args) and not re.fullmatch(r"-?\d+", args[args.index("--seed") + 1]):
+        # a text seed ("audit-2026-11") is hashed, not silently replaced by today's date
+        seed = int(hashlib.sha256(args[args.index("--seed") + 1].encode("utf-8")).hexdigest()[:12], 16)
     chdir_repo_root()
     wiki = find_wiki_dir(load_config())
     if not wiki:
@@ -1475,7 +1808,7 @@ def run_claims(args):
 # Earlier okf contract templates, verbatim: a line of an old block that matches one of these (or the current template)
 # is okf text; anything else is the repo's own and is kept. Eval: an agent refreshing a customized v1 block by hand
 # dropped three of a repo's evidence rules.
-OLD_CONTRACTS = ("<!-- okf:contract v1 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo maintains a durable, agent-facing knowledge base under `{WIKI}/`.\nIt survives compaction and session resets: read it first, write to it as you work.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links to the pages you\nneed. Prefer the wiki over re-deriving knowledge from raw sources or chat history.\n\n**Write as you go (obligation during authorized work).**\n- When work produces a durable fact, decision, or hypothesis a future agent should\n  not have to rediscover, persist it to the right `{WIKI}/` page \u2014 never leave it\n  only in chat.\n- This applies to sessions doing real work. In read-only, review, or audit\n  sessions, do NOT write to the wiki; report instead.\n- Capture full-fidelity source material under `{WIKI}/raw/`; keep synthesis on the\n  topic pages. Do not summarize away primary data that may be needed verbatim.\n- Keep inference separate from evidence: working theories in `hypotheses.md`,\n  confirmed observations in `evidence-matrix.md` (investigative repos).\n- Cite every claim (local path, URL, or thread ref). Mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML\nfrontmatter with `type`, `title`, `description` (one distinguishing single-line\nsentence) required \u00b7 a per-directory `index.md`, updated whenever a page is added\nor removed \u00b7 relative links only between pages (external URLs under `## Sources`) \u00b7\nrewrite inbound links when renaming a page \u00b7 retrieval is files + grep + index.md \u2014\nnever add embeddings, BM25, rerankers, or alias indexes to this wiki.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents are\nread-only: they inspect and report; they never write wiki files.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the\nsame unit of work; if a change truly has no knowledge impact, say so with a\n`## [YYYY-MM-DD] no-impact | <why>` line in `{WIKI}/log.md`. The changelog is\n`{WIKI}/log.md` (newest first, `## [YYYY-MM-DD] kind | Title`). Under Claude Code,\nhooks auto-log session edits and gate stopping; under other agents (Codex etc.)\nthere are no hooks \u2014 append log entries yourself and validate with\n`python3 .okf/lint.py lint` before finishing substantial work. The git pre-commit\nhook and CI lint (where installed) enforce this for every agent.\n<!-- /okf:contract v1 -->\n", "<!-- okf:contract v2 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo keeps a durable, agent-facing knowledge base under `{WIKI}/`. It survives compaction and\nsession resets: read it first, write to it as you work. It routes; it does not summarize the code.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links. Prefer the wiki over re-deriving\nknowledge from raw sources or chat history.\n\n**Write as you go (during authorized work).**\n- A durable fact, decision, or hypothesis a future agent should not rediscover goes to the right\n  `{WIKI}/` page in the same unit of work \u2014 never only into chat, and never into your private\n  auto-memory (that is for your own preferences; repo knowledge belongs here, shared and tracked).\n- Read-only, review, or audit sessions do NOT write to the wiki; they report.\n- Capture full-fidelity source material under `{WIKI}/raw/` and `git add` it; keep synthesis on\n  the topic pages. Untracked captures do not survive `git clean` and never satisfy the gates.\n- Keep inference separate from evidence (`hypotheses.md` vs `evidence-matrix.md` in investigative\n  repos). Cite every claim (local path, URL, or thread ref); mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML frontmatter with\n`type`, `title`, `description` (one distinguishing single-line sentence) \u00b7 a per-directory `index.md`\nupdated whenever a page is added or removed \u00b7 relative links only \u00b7 rewrite inbound links on rename \u00b7\nretrieval is files + grep + index.md \u2014 no embeddings, BM25, rerankers, or alias indexes here.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents inspect and report only.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the same commit; if a\nchange truly has no knowledge impact, say so with `## [YYYY-MM-DD] no-impact | <why>` in\n`{WIKI}/log.md` dated today, or an `Okf-Impact: none` commit trailer. `{WIKI}/log.md` is the event\nlog (newest first, `## [YYYY-MM-DD] kind | Title`).\n\n**Maintenance goes through the skill.** To update, lint, audit, repair or migrate this knowledge base,\nrun `/okf` (the okf skill) instead of editing its structure by hand \u2014 it knows the review anchor,\nthe lint and the hooks. Never build a second knowledge base beside this one.\n\n**What is mechanized, honestly.** Under Claude Code and Codex, hooks in `.claude/settings.json` /\n`.codex/hooks.json` print this pointer, auto-log page edits, and block stopping while code changed\nthis session (uncommitted OR committed) with no wiki or log entry. The git hooks lint staged pages\n(errors block), warn on code-only commits, and advance the review anchor when a commit touches the\nwiki; CI re-runs the same lint. None of these judge knowledge quality \u2014 that is your job. Under an\nagent without hooks: append log entries yourself and run `python3 .okf/lint.py lint` before\nfinishing. `.okf/` is repo-controlled code that runs on every edit, stop, and commit \u2014 review it as\nyou would `husky/` or CI config.\n<!-- /okf:contract v2 -->\n")
+OLD_CONTRACTS = ("<!-- okf:contract v1 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo maintains a durable, agent-facing knowledge base under `{WIKI}/`.\nIt survives compaction and session resets: read it first, write to it as you work.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links to the pages you\nneed. Prefer the wiki over re-deriving knowledge from raw sources or chat history.\n\n**Write as you go (obligation during authorized work).**\n- When work produces a durable fact, decision, or hypothesis a future agent should\n  not have to rediscover, persist it to the right `{WIKI}/` page \u2014 never leave it\n  only in chat.\n- This applies to sessions doing real work. In read-only, review, or audit\n  sessions, do NOT write to the wiki; report instead.\n- Capture full-fidelity source material under `{WIKI}/raw/`; keep synthesis on the\n  topic pages. Do not summarize away primary data that may be needed verbatim.\n- Keep inference separate from evidence: working theories in `hypotheses.md`,\n  confirmed observations in `evidence-matrix.md` (investigative repos).\n- Cite every claim (local path, URL, or thread ref). Mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML\nfrontmatter with `type`, `title`, `description` (one distinguishing single-line\nsentence) required \u00b7 a per-directory `index.md`, updated whenever a page is added\nor removed \u00b7 relative links only between pages (external URLs under `## Sources`) \u00b7\nrewrite inbound links when renaming a page \u00b7 retrieval is files + grep + index.md \u2014\nnever add embeddings, BM25, rerankers, or alias indexes to this wiki.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents are\nread-only: they inspect and report; they never write wiki files.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the\nsame unit of work; if a change truly has no knowledge impact, say so with a\n`## [YYYY-MM-DD] no-impact | <why>` line in `{WIKI}/log.md`. The changelog is\n`{WIKI}/log.md` (newest first, `## [YYYY-MM-DD] kind | Title`). Under Claude Code,\nhooks auto-log session edits and gate stopping; under other agents (Codex etc.)\nthere are no hooks \u2014 append log entries yourself and validate with\n`python3 .okf/lint.py lint` before finishing substantial work. The git pre-commit\nhook and CI lint (where installed) enforce this for every agent.\n<!-- /okf:contract v1 -->\n", "<!-- okf:contract v2 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo keeps a durable, agent-facing knowledge base under `{WIKI}/`. It survives compaction and\nsession resets: read it first, write to it as you work. It routes; it does not summarize the code.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links. Prefer the wiki over re-deriving\nknowledge from raw sources or chat history.\n\n**Write as you go (during authorized work).**\n- A durable fact, decision, or hypothesis a future agent should not rediscover goes to the right\n  `{WIKI}/` page in the same unit of work \u2014 never only into chat, and never into your private\n  auto-memory (that is for your own preferences; repo knowledge belongs here, shared and tracked).\n- Read-only, review, or audit sessions do NOT write to the wiki; they report.\n- Capture full-fidelity source material under `{WIKI}/raw/` and `git add` it; keep synthesis on\n  the topic pages. Untracked captures do not survive `git clean` and never satisfy the gates.\n- Keep inference separate from evidence (`hypotheses.md` vs `evidence-matrix.md` in investigative\n  repos). Cite every claim (local path, URL, or thread ref); mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML frontmatter with\n`type`, `title`, `description` (one distinguishing single-line sentence) \u00b7 a per-directory `index.md`\nupdated whenever a page is added or removed \u00b7 relative links only \u00b7 rewrite inbound links on rename \u00b7\nretrieval is files + grep + index.md \u2014 no embeddings, BM25, rerankers, or alias indexes here.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents inspect and report only.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the same commit; if a\nchange truly has no knowledge impact, say so with `## [YYYY-MM-DD] no-impact | <why>` in\n`{WIKI}/log.md` dated today, or an `Okf-Impact: none` commit trailer. `{WIKI}/log.md` is the event\nlog (newest first, `## [YYYY-MM-DD] kind | Title`).\n\n**Maintenance goes through the skill.** To update, lint, audit, repair or migrate this knowledge base,\nrun `/okf` (the okf skill) instead of editing its structure by hand \u2014 it knows the review anchor,\nthe lint and the hooks. Never build a second knowledge base beside this one.\n\n**What is mechanized, honestly.** Under Claude Code and Codex, hooks in `.claude/settings.json` /\n`.codex/hooks.json` print this pointer, auto-log page edits, and block stopping while code changed\nthis session (uncommitted OR committed) with no wiki or log entry. The git hooks lint staged pages\n(errors block), warn on code-only commits, and advance the review anchor when a commit touches the\nwiki; CI re-runs the same lint. None of these judge knowledge quality \u2014 that is your job. Under an\nagent without hooks: append log entries yourself and run `python3 .okf/lint.py lint` before\nfinishing. `.okf/` is repo-controlled code that runs on every edit, stop, and commit \u2014 review it as\nyou would `husky/` or CI config.\n<!-- /okf:contract v2 -->\n", "<!-- okf:contract v3 -->\n## Knowledge base (OKF / LLM-wiki)\n\nThis repo keeps a durable, agent-facing knowledge base under `{WIKI}/`. It survives compaction and\nsession resets: read it first, write to it as you work. It routes; it does not summarize the code.\n\n**Read first.** Start at `{WIKI}/index.md`; follow relative links. Prefer the wiki over re-deriving\nknowledge from raw sources or chat history.\n\n**Write as you go (during authorized work).**\n- A durable fact, decision, or hypothesis a future agent should not rediscover goes to the right\n  `{WIKI}/` page in the same unit of work \u2014 never only into chat, and never into your private\n  auto-memory (that is for your own preferences; repo knowledge belongs here, shared and tracked).\n- Read-only, review, or audit sessions do NOT write to the wiki; they report.\n- Capture full-fidelity source material under `{WIKI}/raw/` and `git add` it; keep synthesis on\n  the topic pages. Untracked captures do not survive `git clean` and never satisfy the gates.\n- Keep inference separate from evidence (`hypotheses.md` vs `evidence-matrix.md` in investigative\n  repos). Cite every claim (local path, URL, or thread ref); mark uncertain claims `UNVERIFIED`.\n\n**Authoring rules.** One answerable unit per file \u00b7 kebab-case filenames \u00b7 flat YAML frontmatter with\n`type`, `title`, `description` (one distinguishing single-line sentence) \u00b7 a per-directory `index.md`\nupdated whenever a page is added or removed, listing only pages that exist (a later page says `planned`) \u00b7\nrelative links only \u00b7 rewrite inbound links on rename \u00b7\nretrieval is files + grep + index.md \u2014 no embeddings, BM25, rerankers, or alias indexes here.\n\n**Single writer.** The main agent is the sole writer of `{WIKI}/`. Subagents inspect and report only.\n\n**Ship = update.** A change that invalidates a wiki page updates that page in the same commit; if a\nchange truly has no knowledge impact, say so with `## [YYYY-MM-DD] no-impact | <why>` in\n`{WIKI}/log.md` dated today, or an `Okf-Impact: none` commit trailer. `{WIKI}/log.md` is the event\nlog (newest first, `## [YYYY-MM-DD] kind | Title`).\n\n**Maintenance goes through the skill.** To update, lint, audit, repair or migrate this knowledge base,\nrun `/okf` (the okf skill) instead of editing its structure by hand \u2014 it knows the review anchor,\nthe lint and the hooks. Never build a second knowledge base beside this one.\n\n**What is mechanized, honestly.** Under Claude Code and Codex, hooks in `.claude/settings.json` /\n`.codex/hooks.json` print this pointer, auto-log page edits, and block stopping while code changed\nthis session (uncommitted OR committed) with no wiki or log entry. The git hooks lint staged pages and\nindex entries (errors block), warn on code-only commits, and advance the review anchor when a commit\ntouches the wiki; CI re-runs the same lint. None of these judge knowledge quality \u2014 that is your job. Under an\nagent without hooks: append log entries yourself and run `python3 .okf/lint.py lint` before\nfinishing. `.okf/` is repo-controlled code that runs on every edit, stop, and commit \u2014 review it as\nyou would `husky/` or CI config.\n<!-- /okf:contract v3 -->\n")
 CONTRACT_RE = re.compile(r"<!-- okf:contract v(\d+) -->.*?<!-- /okf:contract v\d+ -->\n?", re.S)
 KEPT_HEADING = "## Repo-specific rules kept from the previous okf contract"
 
@@ -1560,11 +1893,12 @@ USAGE = """okf lint %s — usage: python3 .okf/lint.py <subcommand> [flags]
   lint [--quiet]                       structure guard (exit 1 on errors)
   noop-check                           CURRENT / STALE (per-commit) / NO-STATE
   state-update [--mark-reviewed|--auto|--from-last-wiki-commit]
-  stop-gate                            Stop hook: exit 2 blocks, prints {} on allow
+  stop-gate                            Stop hook: advises by default (systemMessage); config stopGate block|off
   hook                                 PostToolUse hook (Claude file_path or Codex apply_patch)
-  session-start                        SessionStart hook: pointer + session base HEAD
+  session-start                        SessionStart hook: pointer + per-session base (session_id)
   pre-commit | post-commit | post-rewrite   git hooks
-  install-hooks <fragment.json> [--target claude|codex]
+  install-hooks <fragment.json> [--target claude|codex] [--replace-custom]
+  upgrade-check                        run the SKILL's copy in a repo before upgrading .okf/ (read-only)
   claims [--n 12] [--seed S]           truth-audit sample (JSON); read-only
   refresh-contract [--template PATH]   replace an older contract block, keeping repo-specific lines
 """ % OKF_LINT_VERSION
@@ -1595,7 +1929,9 @@ def main():
     if cmd == "install-hooks":
         target = args[args.index("--target") + 1] if "--target" in args and args.index("--target") + 1 < len(args) else "claude"
         frag = next((a for a in args[1:] if not a.startswith("-") and a != target), None)
-        return run_install_hooks(frag, target=target)
+        return run_install_hooks(frag, target=target, replace_custom="--replace-custom" in args)
+    if cmd == "upgrade-check":
+        return run_upgrade_check()
     if cmd == "claims":
         return run_claims(args)
     if cmd == "refresh-contract":

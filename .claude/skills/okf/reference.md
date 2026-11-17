@@ -107,6 +107,10 @@ a never-written page for two months while the old warning was ignored.
   synthesis ("did you actually save every piece?" is the recurring failure).
 - Contradictions resolve recency-wins: newest verified evidence supersedes; note the
   supersession on the page and in `log.md`.
+- **The code wins.** When a page and the repository disagree, agents act on the repository and
+  fix the page (contract v4). Without that rule they follow the file: agents obeyed a stale
+  instruction file over the code in 90.1% of choices, and one sentence giving the code precedence
+  raised code-following from 4.2% to 91.4% (arXiv 2610.30571, 2026-10, synthetic projects).
 - **Volatile facts carry their provenance.** An exact count, range, size or version
   ("63 items", "30,400–44,272 ticks", "schema v2") is written with the commit or date it
   was true at, or the command that reproduces it ("69 items in `data/items.json` as of
@@ -144,9 +148,12 @@ Honesty notes (from the adversarial review):
 
 ## 8. Generation & maintenance discipline
 
-- **Do not auto-generate verbose wikis.** LLM-generated context files reduced agent
-  success ~3% at +20% cost; "stale structural references actively mislead" (ETH,
-  arXiv:2602.11988). Bootstrap small (≤8 pages); pages accrete from real ingests.
+- **Do not auto-generate verbose wikis.** ETH arXiv:2602.11988 (v3, 2026-09-29): context files
+  "do not generally improve task success rates" while "increasing inference cost by over 20%";
+  instructions in them are "well followed", repository overviews are "not helpful". (Corrected
+  2026-11: this line used to cite v1's "−3%" — v1 also reported +4% for developer-written files —
+  and a quote, "stale structural references actively mislead", that appears in no version.)
+  Bootstrap small (≤8 pages); pages accrete from real ingests.
 - **Never agentically re-write body prose you already have** (~20× token cost
   measured). Convert deterministically; spend tokens on `description` + `type` only.
 - **Soft diff budget** (from openwiki): <5 source files changed → edit ≤1–2 pages.
@@ -157,8 +164,9 @@ Honesty notes (from the adversarial review):
   Since 1.3.0 it reports *uncertified commits* (code touched, wiki untouched, no
   `[no-impact]` subject or `Okf-Impact: none` trailer), not flat paths: in production the
   anchor had frozen at bootstrap in 3 of 4 repos and the flat list reached 285 paths.
-- **The anchor advances itself**: the `post-commit` git hook stamps when a commit touches
-  the wiki; `post-rewrite` follows amends and rebases; a fresh clone anchors with
+- **The anchor advances itself, honestly**: the `post-commit` git hook stamps when a commit
+  touches the wiki and every commit since the anchor is certified (1.3.0–1.4.3 stamped on any
+  wiki-touching commit, silently certifying earlier code-only commits — a false CURRENT); `post-rewrite` follows amends and rebases; a fresh clone anchors with
   `state-update --from-last-wiki-commit`. `--mark-reviewed` remains for reviewed no-impact diffs.
 - **State stamps are churn-guarded**: `state-update` refuses to rewrite when the wiki
   hash is unchanged (the hash excludes `raw/`); `--mark-reviewed` advances the anchor after a
@@ -167,7 +175,7 @@ Honesty notes (from the adversarial review):
   — leaf wiki pages only, lock-guarded, one dated block per day, inserted below any preamble
   prose and above the newest entry. Hand entries are for meaningful events (`ingest |
   decision | migration | no-impact`), newest first, greppable. A `no-impact` line only
-  excuses the Stop gate when dated today (production showed stale and shipped-feature
+  excuses the Stop check when dated today and added during the session (production showed stale and shipped-feature
   no-impact lines; 21% of one repo's log). Under hookless agents, append hand entries yourself.
 - **Single writer**: orchestrator writes the wiki; subagents inspect and report only.
 - **Plan-then-delete**: `_plan.md` during bootstrap/big ingests; deleted before done.
@@ -179,15 +187,20 @@ Honesty notes (from the adversarial review):
 | **Structure guard** — `.okf/lint.py` | well-formedness + rot signals (never knowledge quality) | on demand, hooks, pre-commit, CI | any |
 | **Structure guard at commit** — git pre-commit (`.okf/githooks/`) | blocks malformed STAGED wiki pages and wiki commits whose `index.md` lists a page not in the commit; WARNS (never blocks) on code-without-wiki commits — a nudge, not forcing | every commit, any agent or human | any (git) |
 | **Structure guard at merge** — CI lint (`ci-okf-lint.yml`) | the same `lint` at PR time; catches malformed pages on fresh clones — it cannot detect a skipped write | PR/push | any (CI) |
-| **Write-forcing** — Stop gate (`lint.py stop-gate`, default) | blocks on code changed THIS SESSION (uncommitted or committed since the SessionStart base) without a wiki page or log entry; uncommitted paths recorded at SessionStart and unchanged since are ignored (someone else's work in progress); escapes: a `no-impact` line dated today or an `Okf-Impact: none` trailer; `raw/` never counts; honors `stop_hook_active` (8-block cap is platform behavior); fails closed on a git timeout | deterministic, zero tokens | Claude Code + Codex |
+| **Stop check** — `lint.py stop-gate` (advises by default; `"stopGate": "block"` blocks) | reports code changed THIS SESSION (uncommitted, or committed by the session and not already on a remote; state keyed by `session_id`) without a wiki page or log entry; uncommitted paths recorded at SessionStart and unchanged since are ignored; escapes: a `no-impact` line added this session and dated today, or an `Okf-Impact: none` trailer; `raw/` never counts; honors `stop_hook_active` (so a blocking gate blocks once per stop); fails closed on a git timeout | deterministic, zero tokens | Claude Code + Codex |
 | **Accelerators** — SessionStart pointer (records the session base), PostToolUse quick-lint (via `additionalContext`, the only PostToolUse output that reaches the model) + auto-log, fired for wiki files written by ANY tool including shell heredocs, post-commit anchor stamp | re-inject context; catch frontmatter slips at write time; keep the anchor current | deterministic | Claude Code + Codex (git hooks: any) |
 | **Guidance** — AGENTS.md contract + this playbook | the only layer that carries *quality* | every session (agents read natively) | any |
 
-Evidence: instructions alone reliably fail (Cline memory-bank: "claims to update but
-never writes files"); deterministic firing works; and the v1.0 review showed the
-opposite overclaim — calling shape-checks "enforcement of knowledge" — is Goodhart
-bait. Front-loading the contract is necessary but not sufficient; the write-forcing
-layers are the pressure substitute. Declared v1 cut ⚖: no PreCompact transcript
+Evidence, revised 2026-11. This section used to open "instructions alone reliably fail (Cline
+memory-bank: 'claims to update but never writes files')"; Cline issue #1911 is a 2025 tool-call bug
+(the update was printed in chat instead of written), not evidence about instructions. The fleet
+review (five production wikis, 192 Codex transcripts) found the opposite: under Codex with no okf
+hooks, 115 of 115 code-changing turns also wrote the wiki; the blocking gate's measured effects were
+placeholder `no-impact` lines and an unsatisfiable gate on a shared worktree; the only real user nags
+(4 in 657 messages) were about knowledge from conversation, which a diff-watching gate cannot see.
+Hence: the contract carries the obligation, the Stop check advises by default, and the effort goes
+into durability (commit warnings), read-time correction (the code wins) and the truth check. The v1.0
+review's warning still stands: calling shape-checks "enforcement of knowledge" is Goodhart bait. Declared v1 cut ⚖: no PreCompact transcript
 snapshot (conflicts with minimal-generation; the SessionStart `compact` matcher
 already re-injects the pointer after compaction). Production evidence (1 Claude + 148 Codex
 threads, 2026-07..09): the pre-commit warning was ignored 8/8 times and the v1.2 Stop gate
@@ -241,11 +254,11 @@ permanent block.
 
 ## Sources (abbreviated)
 
-Karpathy LLM-wiki gist · OKF SPEC.md v0.1 (GoogleCloudPlatform/knowledge-catalog) ·
+Karpathy LLM-wiki gist · OKF SPEC.md v0.2 (GoogleCloudPlatform/open-knowledge-format; v0.1 lived in knowledge-catalog) ·
 langchain-ai/openwiki source (no-op/state-guard/diff-budget mechanics) · Factory
-AutoWiki docs · ETH "Evaluating AGENTS.md" arXiv:2602.11988 · format study
+AutoWiki docs · ETH "Evaluating AGENTS.md" arXiv:2602.11988 · format study (text-to-SQL schema delivery, not repo context files)
 arXiv:2602.05447 · Claude Code hooks docs (Stop/prompt hooks, 8-block cap verified) ·
-Cline memory-bank issue #1911 · the user's own June 2026 benchmarks (fs-vs-embeddings
+Cline issue #1911 (a tool-call bug, see §9) · arXiv 2610.30571 (stale instruction files) · the user's own June 2026 benchmarks (fs-vs-embeddings
 parity; description lift; alias-layer negative; agentic-nav token cost) · local repo
 rot survey + 6-reviewer adversarial panel (2026-07-08, 18 reproduced lint defects
 fixed in 1.1.0).

@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" session-start;  fi"
+            "command": "f=\"$(cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" session-start;  fi"
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" hook;  fi"
+            "command": "f=\"$(cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" hook;  fi"
           }
         ]
       }
@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" stop-gate; else echo '{}'; fi"
+            "command": "f=\"$(cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" stop-gate; else echo '{}'; fi"
           }
         ]
       }

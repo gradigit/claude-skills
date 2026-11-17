@@ -1,5 +1,69 @@
 # Changelog — okf skill
 
+## 1.5.0 (2026-11-18)
+
+Fixes from an independent re-evaluation of the skill and its production fleet (2026-11-17). Inputs: a cold
+review with the original panel prompt (0 critical, 3 major; the false-CURRENT class had returned), a second cold
+review (19 findings, most reproduced), sampled truth audits of five production wikis (5 of 85 checkable sentences
+wrong, 4 of them wrong when written), usage forensics over 192 Codex transcripts and the surviving Claude sessions,
+and outside research. Two findings shaped this release: agents kept the wikis up without hooks (under Codex, with no
+okf hooks installed, 115 of 115 code-changing turns also wrote the wiki), and the real failures were elsewhere —
+wiki edits left uncommitted for months, sessions tripping over each other, and wrong sentences written in the
+first place.
+
+**Correctness and safety (do these before upgrading any repo):**
+- **Honest anchor.** The post-commit hook advanced the review anchor on any wiki-touching commit, so one log line
+  certified every earlier code-only commit and `noop-check` said CURRENT over a stale wiki (reproduced three times).
+  It now advances only when every commit since the anchor is certified; `--root` makes it stamp a repository's
+  first commit.
+- **Hooks pinned to the project.** Claude Code runs hooks in the current directory, which follows the agent's `cd`;
+  the templates resolved `.okf/okf-py.sh` from there, so a nested repo's `.okf/` code could run without a trust
+  prompt (confirmed). Claude hook commands now resolve from `${CLAUDE_PROJECT_DIR}`, and the runner derives the repo
+  from its own location.
+- **`upgrade-check`.** New read-only subcommand, run with the skill's copy before an upgrade. It reports each
+  `.okf/` file as a published release/template or as carrying local changes (sha256 of every published version), and
+  lists hook commands that call `.okf/` code in a non-template form. `install-hooks` now refuses to merge beside such
+  commands unless `--replace-custom`. A simulated upgrade of a live repo with hand-written hooks had produced 3
+  PostToolUse hooks and 2 Stop gates, an exit-2 error on every tool call, and an overwritten local gate fix.
+- **Bootstrap commits everything it touched**, including `.gitignore` and the CI workflow (both were left out).
+
+**Stop check:**
+- **Advisory by default.** On a miss it exits 0 with a JSON `systemMessage` (shown to the user in Claude Code and
+  Codex). `"stopGate": "block"` in `.okf/config.json` restores blocking; `"off"` disables it. The blocking gate's
+  measured effects were friction: in one repo 27 of 29 `no-impact` lines were placeholders forced by subagents'
+  in-flight files, and on a shared worktree the gate became unsatisfiable.
+- **Per-session state.** Base HEAD, pre-existing dirt, hook baseline and existing `no-impact` lines are stored per
+  hook `session_id` in `.okf/sessions/` (atomic writes, pruned after 14 days); a second session no longer erases the
+  first one's gate; resume and compaction keep the base; commits already on a remote (pulls) are not the session's.
+- A `no-impact` line counts only if added during the session and inside today's own dated section (before, one
+  line excused every session all day, and a bullet in an older section could count). Untracked directories are
+  expanded file by file, so new work inside them is seen. A `git log` timeout now fails closed. `"ignorePaths"`
+  (globs) exempts lockfiles and generated output.
+
+**Contract v4** (refresh with `refresh-contract`; v3 is recognised): "the code wins" — when a page and the repository
+disagree, act on the repository and fix the page (agents otherwise followed stale instruction files over the code
+in 90.1% of choices, and one such sentence moved code-following from 4.2% to 91.4%: arXiv 2610.30571); commit wiki
+edits and their captures; knowledge from conversation and user-supplied documents counts (the only kind users had
+to remind agents about); the Stop check described as a notice; a path for collaborators without the skill.
+
+**Durability and lint:** lint and SessionStart flag wiki edits uncommitted for more than 3 days. The cited-evidence
+error now sees page-relative paths, markdown links, bullets and footnotes, not only `[S#] Local: <repo path>`.
+`planned` is matched as a word ("Unplanned" no longer downgrades a dead index entry). An indented continuation of a
+required frontmatter value is an error instead of a silent truncation. A `CLAUDE.md` holding only the text
+`AGENTS.md` (a symlink checked out without symlink support) is flagged. `claims` samples table rows (labelled with
+their headers) and accepts a text `--seed`.
+
+**Docs:** reference.md corrected two load-bearing citations — ETH arXiv:2602.11988's current version finds no
+significant effect on success (the "−3%" was v1-only, and v1 also reported +4% for developer-written files), and the
+quote "stale structural references actively mislead" is in no version; Cline issue #1911 is a tool-call bug, not
+evidence that instructions alone fail. SKILL.md: manual commands go through `sh .okf/okf-py.sh`; detection checks
+legacy wikis before partial ones; the "8 consecutive blocks" statement is gone; Codex install as a symlink or
+`rsync --delete`. Codex SessionStart matcher gains `fork`. EVALUATIONS.md: three stale scenarios fixed, five added.
+
+Known limits: the Stop check attributes worktree changes per session, not per tool call, so concurrent sessions in
+one worktree can still see each other's new writes; Codex hook commands resolve from the session directory (Codex
+sends no project-dir variable). Regression suite: 140 → 174.
+
 ## 1.4.3 (2026-11-17)
 
 Test-only release. `scripts/okf_lint.py` is unchanged and `OKF_LINT_VERSION` stays 1.4.2, so no repo needs an upgrade.

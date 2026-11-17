@@ -3,11 +3,11 @@
   "hooks": {
     "SessionStart": [
       {
-        "matcher": "startup|resume|clear|compact",
+        "matcher": "startup|resume|clear|compact|fork",
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" session-start;  fi",
+            "command": "f=\"$(cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" session-start;  fi",
             "timeout": 10,
             "statusMessage": "okf: session pointer"
           }
@@ -20,7 +20,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" hook;  fi",
+            "command": "f=\"$(cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" hook;  fi",
             "timeout": 10
           }
         ]
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "f=\"$(git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" stop-gate; else echo '{}'; fi",
+            "command": "f=\"$(cd \"${CLAUDE_PROJECT_DIR:-.}\" 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null)/.okf/okf-py.sh\"; if [ -f \"$f\" ]; then sh \"$f\" stop-gate; else echo '{}'; fi",
             "timeout": 20,
             "statusMessage": "okf: stop gate"
           }
