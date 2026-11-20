@@ -210,6 +210,17 @@ You're free to modify any of these to fit your workflow. The skills are MIT-lice
 - Want a different HANDOFF.md format? Edit `handoff/templates.md`
 - Want different audit rules? Edit `auditing-skills/checklist.md`
 
+## Maintaining this repo
+
+The maintainer's `~/.claude/skills` entries for these skills are symlinks into this repo, so edits
+here are live. To publish a new skill:
+
+1. Build and test it in `~/.claude/skills/<name>/`.
+2. Copy it into `.claude/skills/<name>/` in this repo.
+3. Add a row for it to the matching table under [Skills](#skills).
+4. Replace `~/.claude/skills/<name>` with a symlink to the repo copy.
+5. Commit and push.
+
 ## Related
 
 - [forging-workflow](https://github.com/gradigit/forging-workflow) — Companion repo for turning rough ideas into implementation-ready prompts and plans
